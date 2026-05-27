@@ -64,12 +64,30 @@ Export with machine-readable JSON output:
 npx specora export ./openapi.yaml --output ./dist/specora-preview.html --format json
 ```
 
+Run local proxy for browser try-out (CORS-safe mode):
+
+```bash
+npx specora proxy --port 8787
+```
+
+In the web UI Try Out section, enable `Use local proxy mode` and keep the proxy URL as `http://localhost:8787/proxy`.
+
 ## Workspace Layout
 
 - `apps/web`: React + Vite frontend
 - `packages/core`: shared OpenAPI parsing and normalization
 - `packages/cli`: command-line workflow tool
 - `plan`: product and delivery planning docs
+
+## Testing
+
+Run all checks:
+
+```bash
+npm run lint
+npm run build
+npm run test
+```
 
 ## Planning Documents
 

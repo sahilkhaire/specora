@@ -103,3 +103,9 @@ test("export creates HTML file and returns success payload", async () => {
 
   await fs.unlink(outputPath);
 });
+
+test("running CLI without arguments exits cleanly with usage output", async () => {
+  const result = await runCli([], cliRoot);
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /Usage: specora/);
+});

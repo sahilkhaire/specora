@@ -166,6 +166,49 @@ button:disabled {
   max-width: 130px;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.checkbox-row input {
+  width: auto;
+}
+
+.tryout-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.tryout-grid label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.response-box {
+  margin-top: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.7rem;
+  background: #f8fbfd;
+}
+
+.response-box pre {
+  margin: 0;
+  white-space: pre-wrap;
+  max-height: 240px;
+  overflow: auto;
+  background: #102a43;
+  color: #e6f0f6;
+  border-radius: 8px;
+  padding: 0.7rem;
+}
+
 @media (max-width: 700px) {
   .field-row {
     flex-direction: column;
@@ -177,5 +220,9 @@ button:disabled {
 
   .summary {
     grid-column: auto;
+  }
+
+  .tryout-grid {
+    grid-template-columns: 1fr;
   }
 }

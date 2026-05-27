@@ -1,71 +1,12 @@
 import { useMemo, useState } from "react";
-import YAML from "yaml";
-
-type ParseResult = {
-  ok: true;
-  spec: Record<string, unknown>;
-} | {
-  ok: false;
-  error: string;
-};
-
-function parseSpecText(input: string): ParseResult {
-  const trimmed = input.trim();
-  if (!trimmed) {
-    return { ok: false, error: "Spec input is empty." };
-  }
-
-  try {
-    const parsed = trimmed.startsWith("{") || trimmed.startsWith("[")
-      ? JSON.parse(trimmed)
-      : YAML.parse(trimmed);
-
-    if (!parsed || typeof parsed !== "object") {
-      return { ok: false, error: "Parsed spec is not a valid object." };
-    }
-
-    const maybeOpenapi = parsed as Record<string, unknown>;
-    if (!maybeOpenapi.openapi && !maybeOpenapi.swagger) {
-      return { ok: false, error: "Missing openapi/swagger version field." };
-    }
-
-    return { ok: true, spec: maybeOpenapi };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Unknown parse error"
-    };
-  }
-}
-
-function extractOperations(spec: Record<string, unknown>) {
-  const paths = (spec.paths as Record<string, unknown> | undefined) ?? {};
-  const methods = new Set(["get", "post", "put", "patch", "delete", "options", "head"]);
-
-  return Object.entries(paths).flatMap(([path, pathItem]) => {
-    if (!pathItem || typeof pathItem !== "object") {
-      return [];
-    }
-
-    return Object.entries(pathItem as Record<string, unknown>)
-      .filter(([method]) => methods.has(method.toLowerCase()))
-      .map(([method, operation]) => {
-        const op = operation as Record<string, unknown>;
-        const tags = Array.isArray(op.tags) ? op.tags.filter((tag): tag is string => typeof tag === "string") : [];
-
-        return {
-          method: method.toUpperCase(),
-          path,
-          summary: typeof op.summary === "string" ? op.summary : "No summary",
-          operationId: typeof op.operationId === "string" ? op.operationId : "",
-          tags,
-          description: typeof op.description === "string" ? op.description : "",
-          parameters: Array.isArray(op.parameters) ? op.parameters : [],
-          requestBody: op.requestBody
-        };
-      });
-  });
-}
+import {
+  detectDefaultServerUrl,
+  extractOperations,
+  filterOperations,
+  parseSpecText,
+  operationKey
+} from "./spec-utils";
+import { buildRequestUrl, safeParseRecord } from "./tryout-utils";
 
 export function App() {
   const [rawInput, setRawInput] = useState("");
@@ -76,21 +17,21 @@ export function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [methodFilter, setMethodFilter] = useState("ALL");
   const [selectedOperationKey, setSelectedOperationKey] = useState("");
+  const [serverUrl, setServerUrl] = useState("");
+  const [pathParamsInput, setPathParamsInput] = useState("{}");
+  const [queryParamsInput, setQueryParamsInput] = useState("{}");
+  const [headersInput, setHeadersInput] = useState("{}");
+  const [requestBody, setRequestBody] = useState("");
+  const [useProxy, setUseProxy] = useState(false);
+  const [proxyUrl, setProxyUrl] = useState("http://localhost:8787/proxy");
+  const [requestStatus, setRequestStatus] = useState<string>("");
+  const [requestResponse, setRequestResponse] = useState("");
+  const [requestTiming, setRequestTiming] = useState<number | null>(null);
+  const [requestError, setRequestError] = useState("");
+  const [isSending, setIsSending] = useState(false);
 
   const operations = useMemo(() => (spec ? extractOperations(spec) : []), [spec]);
-  const filteredOperations = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-
-    return operations.filter((operation) => {
-      const methodMatch = methodFilter === "ALL" || operation.method === methodFilter;
-      const searchMatch = !query
-        || operation.path.toLowerCase().includes(query)
-        || operation.summary.toLowerCase().includes(query)
-        || operation.tags.some((tag) => tag.toLowerCase().includes(query));
-
-      return methodMatch && searchMatch;
-    });
-  }, [operations, searchTerm, methodFilter]);
+  const filteredOperations = useMemo(() => filterOperations(operations, methodFilter, searchTerm), [operations, searchTerm, methodFilter]);
 
   const selectedOperation = useMemo(() => {
     if (!selectedOperationKey) {
@@ -98,7 +39,7 @@ export function App() {
     }
 
     return filteredOperations.find((operation) => {
-      return `${operation.method}:${operation.path}:${operation.operationId}` === selectedOperationKey;
+      return operationKey(operation) === selectedOperationKey;
     }) ?? filteredOperations[0] ?? null;
   }, [filteredOperations, selectedOperationKey]);
 
@@ -107,14 +48,6 @@ export function App() {
     return ["ALL", ...Array.from(unique).sort()];
   }, [operations]);
   const info = (spec?.info as Record<string, unknown> | undefined) ?? {};
-
-  function operationKey(operation: {
-    method: string;
-    path: string;
-    operationId: string;
-  }): string {
-    return `${operation.method}:${operation.path}:${operation.operationId}`;
-  }
 
   async function loadFromUrl() {
     const url = urlInput.trim();
@@ -142,6 +75,7 @@ export function App() {
       setSpec(result.spec);
       setRawInput(text);
       setSelectedOperationKey("");
+      setServerUrl(detectDefaultServerUrl(result.spec));
     } catch (fetchError) {
       setSpec(null);
       setError(fetchError instanceof Error ? fetchError.message : "Failed to load URL");
@@ -161,6 +95,7 @@ export function App() {
     setError("");
     setSpec(result.spec);
     setSelectedOperationKey("");
+    setServerUrl(detectDefaultServerUrl(result.spec));
   }
 
   async function loadFromFile(file: File | null) {
@@ -180,6 +115,103 @@ export function App() {
     setError("");
     setSpec(result.spec);
     setSelectedOperationKey("");
+    setServerUrl(detectDefaultServerUrl(result.spec));
+  }
+
+  async function sendRequest() {
+    if (!selectedOperation) {
+      setRequestError("No operation selected.");
+      return;
+    }
+
+    const parsedPath = safeParseRecord(pathParamsInput);
+    if (!parsedPath.ok) {
+      setRequestError(`Path params error: ${parsedPath.error}`);
+      return;
+    }
+
+    const parsedQuery = safeParseRecord(queryParamsInput);
+    if (!parsedQuery.ok) {
+      setRequestError(`Query params error: ${parsedQuery.error}`);
+      return;
+    }
+
+    const parsedHeaders = safeParseRecord(headersInput);
+    if (!parsedHeaders.ok) {
+      setRequestError(`Headers error: ${parsedHeaders.error}`);
+      return;
+    }
+
+    if (!serverUrl.trim()) {
+      setRequestError("Server URL is required for try-out.");
+      return;
+    }
+
+    setRequestError("");
+    setIsSending(true);
+    setRequestStatus("");
+    setRequestResponse("");
+
+    const targetUrl = buildRequestUrl({
+      baseUrl: serverUrl,
+      endpointPath: selectedOperation.path,
+      pathParams: parsedPath.data,
+      queryParams: parsedQuery.data
+    });
+
+    const method = selectedOperation.method;
+    const canSendBody = !["GET", "HEAD"].includes(method);
+    const body = canSendBody && requestBody.trim() ? requestBody : undefined;
+    const start = performance.now();
+
+    try {
+      if (useProxy) {
+        const proxyResponse = await fetch(proxyUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            url: targetUrl,
+            method,
+            headers: parsedHeaders.data,
+            body
+          })
+        });
+
+        const payload = await proxyResponse.json() as {
+          ok: boolean;
+          status: number;
+          headers: Record<string, string>;
+          body: string;
+          error?: string;
+        };
+
+        if (!proxyResponse.ok || !payload.ok) {
+          throw new Error(payload.error ?? `Proxy request failed with HTTP ${proxyResponse.status}`);
+        }
+
+        setRequestStatus(`${payload.status}`);
+        setRequestResponse(payload.body || "");
+      } else {
+        const response = await fetch(targetUrl, {
+          method,
+          headers: parsedHeaders.data,
+          body
+        });
+
+        const responseText = await response.text();
+        setRequestStatus(`${response.status}`);
+        setRequestResponse(responseText);
+      }
+
+      setRequestTiming(Math.round(performance.now() - start));
+    } catch (sendError) {
+      setRequestError(sendError instanceof Error ? sendError.message : "Failed to send request");
+      setRequestTiming(Math.round(performance.now() - start));
+    } finally {
+      setIsSending(false);
+    }
   }
 
   return (
@@ -296,6 +328,67 @@ export function App() {
         ) : (
           <p>No operation selected.</p>
         )}
+      </section>
+
+      <section className="panel tryout">
+        <h2>Try Out</h2>
+        <div className="field-row">
+          <input
+            value={serverUrl}
+            onChange={(event) => setServerUrl(event.target.value)}
+            placeholder="https://api.example.com"
+          />
+        </div>
+
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={useProxy}
+            onChange={(event) => setUseProxy(event.target.checked)}
+          />
+          Use local proxy mode
+        </label>
+
+        {useProxy ? (
+          <div className="field-row">
+            <input
+              value={proxyUrl}
+              onChange={(event) => setProxyUrl(event.target.value)}
+              placeholder="http://localhost:8787/proxy"
+            />
+          </div>
+        ) : null}
+
+        <div className="tryout-grid">
+          <div>
+            <label>Path Params (JSON object)</label>
+            <textarea value={pathParamsInput} onChange={(event) => setPathParamsInput(event.target.value)} rows={3} />
+          </div>
+          <div>
+            <label>Query Params (JSON object)</label>
+            <textarea value={queryParamsInput} onChange={(event) => setQueryParamsInput(event.target.value)} rows={3} />
+          </div>
+          <div>
+            <label>Headers (JSON object)</label>
+            <textarea value={headersInput} onChange={(event) => setHeadersInput(event.target.value)} rows={3} />
+          </div>
+          <div>
+            <label>Request Body</label>
+            <textarea value={requestBody} onChange={(event) => setRequestBody(event.target.value)} rows={4} />
+          </div>
+        </div>
+
+        <button type="button" onClick={sendRequest} disabled={!selectedOperation || isSending}>
+          {isSending ? "Sending..." : "Send Request"}
+        </button>
+
+        {requestError ? <p className="error">{requestError}</p> : null}
+
+        <div className="response-box">
+          <p><strong>Status:</strong> {requestStatus || "N/A"}</p>
+          <p><strong>Time:</strong> {requestTiming !== null ? `${requestTiming} ms` : "N/A"}</p>
+          <pre>{requestResponse || "No response yet."}</pre>
+        </div>
       </section>
     </div>
   );
