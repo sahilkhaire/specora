@@ -10,7 +10,7 @@
     "test": "echo \"No tests yet for @specora/core\""
   },
   "dependencies": {
-    "@apidevtools/swagger-parser": "^11.1.0",
+    "@apidevtools/swagger-parser": "^12.1.0",
     "yaml": "^2.5.1"
   }
 }
