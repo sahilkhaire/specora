@@ -1,0 +1,16 @@
+{
+  "name": "@specora/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"No tests yet for @specora/core\""
+  },
+  "dependencies": {
+    "@apidevtools/swagger-parser": "^11.1.0",
+    "yaml": "^2.5.1"
+  }
+}

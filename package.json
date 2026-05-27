@@ -1,0 +1,21 @@
+{
+  "name": "specora",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Specora: modern open-source OpenAPI documentation and workflow toolkit",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run -ws build",
+    "dev:web": "npm run -w @specora/web dev",
+    "dev:cli": "npm run -w @specora/cli dev",
+    "lint": "npm run -ws lint",
+    "test": "npm run -ws test"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "Apache-2.0"
+}

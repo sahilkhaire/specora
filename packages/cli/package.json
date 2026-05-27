@@ -1,0 +1,24 @@
+{
+  "name": "@specora/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "specora": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"No tests yet for @specora/cli\""
+  },
+  "dependencies": {
+    "@specora/core": "0.1.0",
+    "commander": "^12.1.0",
+    "yaml": "^2.5.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
