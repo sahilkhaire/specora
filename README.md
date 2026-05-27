@@ -75,9 +75,26 @@ In the web UI Try Out section, enable `Use local proxy mode` and keep the proxy 
 ## Workspace Layout
 
 - `apps/web`: React + Vite frontend
+	- `src/app`: application composition and top-level screens
+	- `src/features`: feature modules (spec parsing, try-out, etc.)
+	- `src/shared`: shared styles and common UI helpers
 - `packages/core`: shared OpenAPI parsing and normalization
+	- `src/parsing`: parsing and validation pipeline
+	- `src/summarization`: summary and metadata extraction
+	- `src/types`: shared public contract types
 - `packages/cli`: command-line workflow tool
-- `plan`: product and delivery planning docs
+	- `src/app`: CLI orchestration entry logic
+	- `src/commands`: command-level modules
+	- `src/server`: local proxy and serve server modules
+	- `src/utils`: reusable CLI helpers
+- `plan`: enterprise planning and governance docs
+
+## Codebase Conventions
+
+1. Keep business/domain logic inside feature or package modules, not in entry files.
+2. Keep public APIs stable through package root exports.
+3. Keep tests close to relevant module boundaries (`tests` or feature-level test files).
+4. Keep `main` and `index` files thin and orchestration-only.
 
 ## Testing
 

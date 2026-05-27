@@ -1,0 +1,28 @@
+# CODEOWNERS
+#
+# Each line maps a path pattern to the GitHub team or user responsible for
+# reviewing pull requests that touch those paths.
+#
+# Format: <path-pattern>  <owner> [<owner2> …]
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# ── Repository-level defaults ───────────────────────────────────────────────
+*                              @specora-team
+
+# ── Governance & planning ───────────────────────────────────────────────────
+/plan/                         @specora-team
+/.github/                      @specora-team
+
+# ── Core parsing library ─────────────────────────────────────────────────────
+/packages/core/                @specora-core
+
+# ── CLI package ──────────────────────────────────────────────────────────────
+/packages/cli/                 @specora-cli
+
+# ── Web application ──────────────────────────────────────────────────────────
+/apps/web/                     @specora-web
+
+# ── Build & CI infrastructure ────────────────────────────────────────────────
+/scripts/                      @specora-team
+/.github/workflows/            @specora-team
+/tsconfig.base.json            @specora-team

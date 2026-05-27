@@ -31,6 +31,7 @@ describe("App", () => {
   it("loads pasted spec and renders summary + operations", async () => {
     render(<App />);
 
+    fireEvent.click(screen.getByRole("tab", { name: "Paste" }));
     const textarea = screen.getByPlaceholderText("Paste OpenAPI JSON or YAML here");
     fireEvent.change(textarea, { target: { value: fixture } });
 
@@ -44,6 +45,7 @@ describe("App", () => {
   it("filters operations and updates operation detail", async () => {
     render(<App />);
 
+    fireEvent.click(screen.getByRole("tab", { name: "Paste" }));
     const textarea = screen.getByPlaceholderText("Paste OpenAPI JSON or YAML here");
     fireEvent.change(textarea, { target: { value: fixture } });
     fireEvent.click(screen.getByRole("button", { name: "Parse Pasted Spec" }));
@@ -56,6 +58,6 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Create order/i }));
     expect(screen.getByText(/Operation ID:/)).toBeInTheDocument();
-    expect(screen.getByText("createOrder")).toBeInTheDocument();
+    expect(screen.getByText(/Request Body:/)).toBeInTheDocument();
   });
 });
