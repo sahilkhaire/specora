@@ -70,6 +70,7 @@ export function App() {
   const [authType, setAuthType] = useState<AuthType>("none");
   const [authValue, setAuthValue] = useState("");
   const [authKeyName, setAuthKeyName] = useState("X-API-Key");
+  const [showSpecLoader, setShowSpecLoader] = useState(false);
   const urlInputRef = useRef<HTMLInputElement>(null);
 
   const operations = useMemo(() => (spec ? extractOperations(spec) : []), [spec]);
@@ -298,11 +299,14 @@ export function App() {
             type="button"
             className="import-btn"
             onClick={() => {
-              setLoadMode("url");
-              setTimeout(() => urlInputRef.current?.focus(), 50);
+              setShowSpecLoader(!showSpecLoader);
+              if (!showSpecLoader) {
+                setLoadMode("url");
+                setTimeout(() => urlInputRef.current?.focus(), 50);
+              }
             }}
           >
-            Import Spec
+            {showSpecLoader ? "Close" : "Import Spec"}
           </button>
         </div>
       </header>
@@ -356,96 +360,6 @@ export function App() {
               </button>
             )) : <p className="empty-message">No operations match your current filters.</p>}
           </div>
-        </section>
-
-        <section className="mid-pane">
-          <article className="panel-card">
-            <h2>Load Spec</h2>
-            <div className="load-tabs" role="tablist" aria-label="Load mode">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={loadMode === "url"}
-                className={loadMode === "url" ? "active" : ""}
-                onClick={() => setLoadMode("url")}
-              >
-                URL
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={loadMode === "upload"}
-                className={loadMode === "upload" ? "active" : ""}
-                onClick={() => setLoadMode("upload")}
-              >
-                Upload
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={loadMode === "paste"}
-                className={loadMode === "paste" ? "active" : ""}
-                onClick={() => setLoadMode("paste")}
-              >
-                Paste
-              </button>
-            </div>
-
-            {loadMode === "url" ? (
-              <div className="stack">
-                <input
-                  ref={urlInputRef}
-                  value={urlInput}
-                  onChange={(event) => setUrlInput(event.target.value)}
-                  placeholder="https://example.com/openapi.json"
-                />
-                <button type="button" onClick={loadFromUrl} disabled={isLoadingUrl}>
-                  {isLoadingUrl ? "Loading..." : "Load URL"}
-                </button>
-              </div>
-            ) : null}
-
-            {loadMode === "upload" ? (
-              <div className="stack">
-                <input
-                  type="file"
-                  accept=".json,.yaml,.yml"
-                  onChange={(event) => void loadFromFile(event.target.files?.[0] ?? null)}
-                />
-              </div>
-            ) : null}
-
-            {loadMode === "paste" ? (
-              <div className="stack">
-                <textarea
-                  value={rawInput}
-                  onChange={(event) => setRawInput(event.target.value)}
-                  placeholder="Paste OpenAPI JSON or YAML here"
-                  rows={10}
-                />
-                <button type="button" onClick={loadFromText}>Parse Pasted Spec</button>
-              </div>
-            ) : null}
-
-            {error ? <p className="error">{error}</p> : null}
-          </article>
-
-          <article className="panel-card summary-card">
-            <div className="summary-head">
-              <h2>API Summary</h2>
-              <span className="healthy-badge">HEALTHY</span>
-            </div>
-            {spec ? (
-              <>
-                <p><span>Title</span> {String(info.title ?? "Untitled API")}</p>
-                <p><span>Version</span> {String(info.version ?? "unknown")}</p>
-                <p><span>Operations</span> {operations.length}</p>
-                <p><span>Visible</span> {filteredOperations.length}</p>
-              </>
-            ) : (
-              <p className="empty-message">No spec loaded yet.</p>
-            )}
-          </article>
         </section>
 
         <section className="right-pane">
@@ -600,6 +514,114 @@ export function App() {
           </article>
         </section>
       </div>
+
+      {showSpecLoader && (
+        <div className="spec-loader-overlay">
+          <div className="spec-loader-panel">
+            <div className="spec-loader-header">
+              <h2>Import Specification</h2>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowSpecLoader(false)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="spec-loader-content">
+              <article className="panel-card">
+                <h3>Load Spec</h3>
+                <div className="load-tabs" role="tablist" aria-label="Load mode">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={loadMode === "url"}
+                    className={loadMode === "url" ? "active" : ""}
+                    onClick={() => setLoadMode("url")}
+                  >
+                    URL
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={loadMode === "upload"}
+                    className={loadMode === "upload" ? "active" : ""}
+                    onClick={() => setLoadMode("upload")}
+                  >
+                    Upload
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={loadMode === "paste"}
+                    className={loadMode === "paste" ? "active" : ""}
+                    onClick={() => setLoadMode("paste")}
+                  >
+                    Paste
+                  </button>
+                </div>
+
+                {loadMode === "url" ? (
+                  <div className="stack">
+                    <input
+                      ref={urlInputRef}
+                      value={urlInput}
+                      onChange={(event) => setUrlInput(event.target.value)}
+                      placeholder="https://example.com/openapi.json"
+                    />
+                    <button type="button" onClick={loadFromUrl} disabled={isLoadingUrl}>
+                      {isLoadingUrl ? "Loading..." : "Load URL"}
+                    </button>
+                  </div>
+                ) : null}
+
+                {loadMode === "upload" ? (
+                  <div className="stack">
+                    <input
+                      type="file"
+                      accept=".json,.yaml,.yml"
+                      onChange={(event) => void loadFromFile(event.target.files?.[0] ?? null)}
+                    />
+                  </div>
+                ) : null}
+
+                {loadMode === "paste" ? (
+                  <div className="stack">
+                    <textarea
+                      value={rawInput}
+                      onChange={(event) => setRawInput(event.target.value)}
+                      placeholder="Paste OpenAPI JSON or YAML here"
+                      rows={10}
+                    />
+                    <button type="button" onClick={loadFromText}>Parse Pasted Spec</button>
+                  </div>
+                ) : null}
+
+                {error ? <p className="error">{error}</p> : null}
+              </article>
+
+              <article className="panel-card summary-card">
+                <div className="summary-head">
+                  <h3>API Summary</h3>
+                  <span className="healthy-badge">HEALTHY</span>
+                </div>
+                {spec ? (
+                  <>
+                    <p><span>Title</span> {String(info.title ?? "Untitled API")}</p>
+                    <p><span>Version</span> {String(info.version ?? "unknown")}</p>
+                    <p><span>Operations</span> {operations.length}</p>
+                    <p><span>Visible</span> {filteredOperations.length}</p>
+                  </>
+                ) : (
+                  <p className="empty-message">No spec loaded yet.</p>
+                )}
+              </article>
+            </div>
+          </div>
+        </div>
+      )}
 
       <nav className="mobile-bottom-nav" aria-label="Mobile sections">
         <button type="button" className="active">Endpoints</button>

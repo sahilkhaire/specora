@@ -31,6 +31,9 @@ describe("App", () => {
   it("loads pasted spec and renders summary + operations", async () => {
     render(<App />);
 
+    // Open the spec loader overlay
+    fireEvent.click(screen.getByRole("button", { name: "Import Spec" }));
+
     fireEvent.click(screen.getByRole("tab", { name: "Paste" }));
     const textarea = screen.getByPlaceholderText("Paste OpenAPI JSON or YAML here");
     fireEvent.change(textarea, { target: { value: fixture } });
@@ -44,6 +47,9 @@ describe("App", () => {
 
   it("filters operations and updates operation detail", async () => {
     render(<App />);
+
+    // Open the spec loader overlay
+    fireEvent.click(screen.getByRole("button", { name: "Import Spec" }));
 
     fireEvent.click(screen.getByRole("tab", { name: "Paste" }));
     const textarea = screen.getByPlaceholderText("Paste OpenAPI JSON or YAML here");

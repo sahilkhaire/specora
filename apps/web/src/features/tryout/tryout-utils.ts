@@ -117,3 +117,18 @@ export function buildAuthHeaders(auth: AuthConfig): Record<string, string> {
   }
   return {};
 }
+
+// ─── Variable interpolation ─────────────────────────────────────────────────
+
+/**
+ * Replace every `{{varName}}` token in `input` with the matching entry from
+ * `variables`. Unknown tokens are left unchanged so users can spot typos.
+ */
+export function applyVariables(
+  input: string,
+  variables: Record<string, string>
+): string {
+  return input.replace(/\{\{(\w+)\}\}/g, (match, key: string) =>
+    Object.prototype.hasOwnProperty.call(variables, key) ? variables[key] : match
+  );
+}

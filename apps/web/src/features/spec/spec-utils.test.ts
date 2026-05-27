@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractOperations, filterOperations, parseSpecText } from "./spec-utils";
+import { extractOperations, filterOperations, parseSpecText, groupOperationsByTags } from "./spec-utils";
 
 const fixture = `
 openapi: 3.0.3
@@ -89,5 +89,60 @@ describe("spec-utils", () => {
     const searchPets = filterOperations(operations, "ALL", "pets");
     expect(searchPets).toHaveLength(1);
     expect(searchPets[0]?.path).toBe("/pets");
+  });
+
+  it("groups operations by tags", () => {
+    const parsed = parseSpecText(fixture);
+    if (!parsed.ok) {
+      throw new Error(parsed.error);
+    }
+
+    const operations = extractOperations(parsed.spec);
+    const grouped = groupOperationsByTags(operations);
+
+    expect(grouped).toHaveLength(2);
+    expect(grouped[0]?.tag).toBe("orders");
+    expect(grouped[0]?.operations).toHaveLength(1);
+    expect(grouped[1]?.tag).toBe("pets");
+    expect(grouped[1]?.operations).toHaveLength(1);
+  });
+
+  it("groups operations without tags into 'Untagged'", () => {
+    const specWithUntagged = `
+openapi: 3.0.3
+info:
+  title: Test API
+  version: 1.0.0
+paths:
+  /tagged:
+    get:
+      summary: Tagged endpoint
+      tags: [api]
+      responses:
+        "200":
+          description: ok
+  /untagged:
+    get:
+      summary: Untagged endpoint
+      responses:
+        "200":
+          description: ok
+`;
+    const parsed = parseSpecText(specWithUntagged);
+    if (!parsed.ok) {
+      throw new Error(parsed.error);
+    }
+
+    const operations = extractOperations(parsed.spec);
+    const grouped = groupOperationsByTags(operations);
+
+    expect(grouped).toHaveLength(2);
+    const apiGroup = grouped.find((g) => g.tag === "api");
+    const untaggedGroup = grouped.find((g) => g.tag === "Untagged");
+
+    expect(apiGroup).toBeDefined();
+    expect(apiGroup?.operations).toHaveLength(1);
+    expect(untaggedGroup).toBeDefined();
+    expect(untaggedGroup?.operations).toHaveLength(1);
   });
 });

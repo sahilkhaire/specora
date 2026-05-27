@@ -186,6 +186,41 @@ export function operationKey(operation: Pick<OperationItem, "method" | "path" | 
   return `${operation.method}:${operation.path}:${operation.operationId}`;
 }
 
+export interface TagGroup {
+  tag: string;
+  operations: OperationItem[];
+}
+
+export function groupOperationsByTags(operations: OperationItem[]): TagGroup[] {
+  const tagMap = new Map<string, OperationItem[]>();
+
+  operations.forEach((operation) => {
+    if (operation.tags.length === 0) {
+      // Operations without tags go into "Untagged" group
+      const untaggedOps = tagMap.get("Untagged") ?? [];
+      untaggedOps.push(operation);
+      tagMap.set("Untagged", untaggedOps);
+    } else {
+      // Add operation to each of its tags
+      operation.tags.forEach((tag) => {
+        const tagOps = tagMap.get(tag) ?? [];
+        tagOps.push(operation);
+        tagMap.set(tag, tagOps);
+      });
+    }
+  });
+
+  // Convert map to array and sort by tag name
+  return Array.from(tagMap.entries())
+    .map(([tag, ops]) => ({ tag, operations: ops }))
+    .sort((a, b) => {
+      // "Untagged" goes to the end
+      if (a.tag === "Untagged") return 1;
+      if (b.tag === "Untagged") return -1;
+      return a.tag.localeCompare(b.tag);
+    });
+}
+
 export function detectDefaultServerUrl(spec: Record<string, unknown>): string {
   const servers = spec.servers;
   if (Array.isArray(servers) && servers.length > 0) {
