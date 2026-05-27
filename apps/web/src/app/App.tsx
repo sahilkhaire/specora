@@ -8,6 +8,10 @@ import {
 } from "@/features/spec/spec-utils";
 import { buildRequestUrl, buildAuthHeaders, safeParseRecord, scaffoldFromParameters } from "@/features/tryout/tryout-utils";
 import type { AuthConfig, AuthType } from "@/features/tryout/tryout-utils";
+import { useWorkspaces } from "@/features/workspaces/use-workspaces";
+import { WorkspaceSelector } from "@/features/workspaces/WorkspaceSelector";
+import { useEnvironments } from "@/features/environments/use-environments";
+import { EnvPanel } from "@/features/environments/EnvPanel";
 
 type LoadMode = "url" | "upload" | "paste";
 
@@ -40,6 +44,30 @@ function methodTone(method: string): string {
   if (method === "DELETE") {
     return "method-badge method-delete";
   }
+
+  // Workspace management
+  const {
+    workspaces,
+  
+  // Get spec from active workspace
+  const spec = activeWorkspace?.spec ?? null;
+  
+    activeWorkspace,
+    createWorkspace,
+    updateWorkspaceSpec,
+    deleteWorkspace,
+    switchWorkspace,
+  } = useWorkspaces();
+
+  // Environment management (workspace-scoped)
+  const envHook = useEnvironments(activeWorkspaceId);
+
+  // Create a default workspace if none exists
+  useEffect(() => {
+    if (workspaces.length === 0) {
+      createWorkspace("Default Workspace", "Your first workspace");
+    }
+  }, [workspaces.length, createWorkspace]);
 
   return "method-badge method-default";
 }
