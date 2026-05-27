@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -128,7 +128,7 @@ program
     const html = generateHtml(summary, result.spec);
 
     const port = Number.parseInt(options.port, 10);
-    const server = createServer((_req, res) => {
+    const server = createServer((_req: IncomingMessage, res: ServerResponse) => {
       res.statusCode = 200;
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.end(html);

@@ -8,11 +8,11 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run -ws build",
+    "build": "npm run -w @specora/core build && npm run -w @specora/cli build && npm run -w @specora/web build",
     "dev:web": "npm run -w @specora/web dev",
     "dev:cli": "npm run -w @specora/cli dev",
-    "lint": "npm run -ws lint",
-    "test": "npm run -ws test"
+    "lint": "npm run -w @specora/core lint && npm run -w @specora/cli lint && npm run -w @specora/web lint",
+    "test": "npm run -w @specora/core test && npm run -w @specora/cli test && npm run -w @specora/web test"
   },
   "engines": {
     "node": ">=20.0.0"

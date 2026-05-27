@@ -65,7 +65,7 @@ export async function parseAndValidateSpec(options: ParseSpecOptions): Promise<P
       loaded = bundled;
     } else {
       loaded = parseTextInput(options.value);
-      await SwaggerParser.validate(loaded as object);
+      await SwaggerParser.validate(loaded as any);
     }
 
     return {
