@@ -40,6 +40,12 @@ Validate a local spec:
 npx specora validate ./openapi.yaml
 ```
 
+Validate with machine-readable JSON output:
+
+```bash
+npx specora validate ./openapi.yaml --format json
+```
+
 Serve a local preview:
 
 ```bash
@@ -50,6 +56,12 @@ Export static HTML preview:
 
 ```bash
 npx specora export ./openapi.yaml --output ./dist/specora-preview.html
+```
+
+Export with machine-readable JSON output:
+
+```bash
+npx specora export ./openapi.yaml --output ./dist/specora-preview.html --format json
 ```
 
 ## Workspace Layout

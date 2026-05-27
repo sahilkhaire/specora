@@ -8,11 +8,14 @@ import { parseAndValidateSpec, summarizeSpec } from "@specora/core";
 import YAML from "yaml";
 
 const program = new Command();
+type OutputFormat = "text" | "json";
 
 program
   .name("specora")
   .description("Specora CLI for OpenAPI validation, preview, and export")
   .version("0.1.0");
+
+program.showHelpAfterError();
 
 async function readSpecText(specPath: string): Promise<string> {
   const absolute = path.resolve(specPath);
@@ -68,22 +71,38 @@ async function parseFromFile(specPath: string) {
   return { result, text };
 }
 
+function printFailure(prefix: string, message: string, hint: string | undefined, format: OutputFormat): void {
+  if (format === "json") {
+    console.log(JSON.stringify({ ok: false, error: { prefix, message, hint } }, null, 2));
+    return;
+  }
+
+  console.error(`${prefix}: ${message}`);
+  if (hint) {
+    console.error(`Hint: ${hint}`);
+  }
+}
+
 program
   .command("validate")
   .description("Validate an OpenAPI JSON/YAML file")
   .argument("<specPath>", "Path to spec file")
-  .action(async (specPath) => {
+  .option("-f, --format <format>", "Output format: text or json", "text")
+  .action(async (specPath, options: { format: OutputFormat }) => {
+    const format = options.format === "json" ? "json" : "text";
     const { result } = await parseFromFile(specPath);
     if (!result.ok) {
-      console.error(`Validation failed: ${result.error.message}`);
-      if (result.error.hint) {
-        console.error(`Hint: ${result.error.hint}`);
-      }
+      printFailure("Validation failed", result.error.message, result.error.hint, format);
       process.exitCode = 1;
       return;
     }
 
     const summary = summarizeSpec(result.spec);
+    if (format === "json") {
+      console.log(JSON.stringify({ ok: true, summary }, null, 2));
+      return;
+    }
+
     console.log("Validation successful");
     console.log(JSON.stringify(summary, null, 2));
   });
@@ -93,10 +112,12 @@ program
   .description("Export a static HTML preview from an OpenAPI file")
   .argument("<specPath>", "Path to spec file")
   .option("-o, --output <outputPath>", "Output HTML path", "dist/specora-preview.html")
-  .action(async (specPath, options: { output: string }) => {
+  .option("-f, --format <format>", "Output format: text or json", "text")
+  .action(async (specPath, options: { output: string; format: OutputFormat }) => {
+    const format = options.format === "json" ? "json" : "text";
     const { result } = await parseFromFile(specPath);
     if (!result.ok) {
-      console.error(`Export failed: ${result.error.message}`);
+      printFailure("Export failed", result.error.message, result.error.hint, format);
       process.exitCode = 1;
       return;
     }
@@ -107,6 +128,11 @@ program
     const summary = summarizeSpec(result.spec);
     const html = generateHtml(summary, result.spec);
     await fs.writeFile(outputPath, html, "utf8");
+
+    if (format === "json") {
+      console.log(JSON.stringify({ ok: true, outputPath, summary }, null, 2));
+      return;
+    }
 
     console.log(`Exported preview to ${outputPath}`);
   });
@@ -165,4 +191,13 @@ program
     console.log(JSON.stringify(summarizeSpec(result.spec), null, 2));
   });
 
-program.parseAsync(process.argv);
+if (process.argv.length <= 2) {
+  program.outputHelp();
+  process.exit(0);
+}
+
+program.parseAsync(process.argv).catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : "Unknown CLI error";
+  console.error(`CLI execution failed: ${message}`);
+  process.exit(1);
+});

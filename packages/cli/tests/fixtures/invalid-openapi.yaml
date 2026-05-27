@@ -1,0 +1,6 @@
+info:
+  title: Missing OpenAPI Version
+paths:
+  /broken:
+    get:
+      summary: Broken endpoint
