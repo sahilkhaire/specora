@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   detectDefaultServerUrl,
   extractOperations,
@@ -6,7 +6,8 @@ import {
   parseSpecText,
   operationKey
 } from "@/features/spec/spec-utils";
-import { buildRequestUrl, safeParseRecord } from "@/features/tryout/tryout-utils";
+import { buildRequestUrl, buildAuthHeaders, safeParseRecord, scaffoldFromParameters } from "@/features/tryout/tryout-utils";
+import type { AuthConfig, AuthType } from "@/features/tryout/tryout-utils";
 
 type LoadMode = "url" | "upload" | "paste";
 
@@ -66,6 +67,9 @@ export function App() {
   const [requestTiming, setRequestTiming] = useState<number | null>(null);
   const [requestError, setRequestError] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [authType, setAuthType] = useState<AuthType>("none");
+  const [authValue, setAuthValue] = useState("");
+  const [authKeyName, setAuthKeyName] = useState("X-API-Key");
   const urlInputRef = useRef<HTMLInputElement>(null);
 
   const operations = useMemo(() => (spec ? extractOperations(spec) : []), [spec]);
@@ -86,6 +90,22 @@ export function App() {
     return ["ALL", ...Array.from(unique).sort()];
   }, [operations]);
   const info = (spec?.info as Record<string, unknown> | undefined) ?? {};
+
+  // When the selected operation changes, auto-scaffold params from the spec definition.
+  // We key on the stable string ID so typing in the search box doesn't reset manual edits.
+  const selectedOpKey = selectedOperation ? operationKey(selectedOperation) : "";
+  useEffect(() => {
+    if (!selectedOperation) return;
+    const { pathParams, queryParams, headers } = scaffoldFromParameters(selectedOperation.parameters);
+    const fmt = (obj: Record<string, string>) =>
+      Object.keys(obj).length > 0 ? JSON.stringify(obj, null, 2) : "{}";
+    setPathParamsInput(fmt(pathParams));
+    setQueryParamsInput(fmt(queryParams));
+    setHeadersInput(fmt(headers));
+  // selectedOperation object reference changes on every search keystroke even for the same op;
+  // selectedOpKey is stable — only changes when a genuinely different operation is picked.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedOpKey]);
 
   async function loadFromUrl() {
     const url = urlInput.trim();
@@ -201,6 +221,8 @@ export function App() {
     const method = selectedOperation.method;
     const canSendBody = !["GET", "HEAD"].includes(method);
     const body = canSendBody && requestBody.trim() ? requestBody : undefined;
+    const authCfg: AuthConfig = { type: authType, value: authValue, keyName: authKeyName };
+    const mergedHeaders = { ...parsedHeaders.data, ...buildAuthHeaders(authCfg) };
     const start = performance.now();
 
     try {
@@ -213,7 +235,7 @@ export function App() {
           body: JSON.stringify({
             url: targetUrl,
             method,
-            headers: parsedHeaders.data,
+            headers: mergedHeaders,
             body
           })
         });
@@ -236,7 +258,7 @@ export function App() {
       } else {
         const response = await fetch(targetUrl, {
           method,
-          headers: parsedHeaders.data,
+          headers: mergedHeaders,
           body
         });
 
@@ -485,6 +507,46 @@ export function App() {
                 </label>
               ) : null}
             </div>
+
+            <details className="auth-section">
+              <summary>Authentication</summary>
+              <div className="auth-grid">
+                <label>
+                  <span>Type</span>
+                  <select value={authType} onChange={(event) => setAuthType(event.target.value as AuthType)}>
+                    <option value="none">None</option>
+                    <option value="bearer">Bearer Token</option>
+                    <option value="basic">Basic (base64)</option>
+                    <option value="api-key">API Key</option>
+                  </select>
+                </label>
+                {authType !== "none" ? (
+                  <>
+                    {authType === "api-key" ? (
+                      <label>
+                        <span>Header Name</span>
+                        <input
+                          value={authKeyName}
+                          onChange={(event) => setAuthKeyName(event.target.value)}
+                          placeholder="X-API-Key"
+                        />
+                      </label>
+                    ) : null}
+                    <label className={authType === "api-key" ? "" : "auth-value-full"}>
+                      <span>
+                        {authType === "bearer" ? "Token" : authType === "basic" ? "Credentials (base64)" : "API Key Value"}
+                      </span>
+                      <input
+                        type="password"
+                        value={authValue}
+                        onChange={(event) => setAuthValue(event.target.value)}
+                        placeholder={authType === "bearer" ? "eyJ…" : authType === "basic" ? "dXNlcjpwYXNz" : "••••••"}
+                      />
+                    </label>
+                  </>
+                ) : null}
+              </div>
+            </details>
 
             <div className="tryout-grid">
               <label>
