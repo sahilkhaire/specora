@@ -1,7 +1,0 @@
-{
-  "chat.tools.terminal.autoApprove": {
-    "npm run -w @specora/cli": true,
-    "npm run -w @specora/web": true,
-    "npx vitest": true
-  }
-}
