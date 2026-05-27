@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { parseAndValidateSpec, summarizeSpec } from "../src/index";
+import { parseAndValidateSpec, summarizeSpec } from "../src/index.js";
 
 const validJsonSpec = JSON.stringify(
   {

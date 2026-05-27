@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest an improvement for Specora
+title: "feature: "
+labels: ["type:feature", "priority:p2"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What user problem are you trying to solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should Specora do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any alternatives or workarounds?
+    validations:
+      required: false
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Expected impact
+      description: Who benefits and how?
+    validations:
+      required: false

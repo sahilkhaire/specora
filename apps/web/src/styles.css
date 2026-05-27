@@ -71,12 +71,14 @@ body {
 
 input,
 textarea,
+select,
 button {
   font: inherit;
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   padding: 0.65rem 0.75rem;
   border: 1px solid var(--border);
@@ -125,10 +127,25 @@ button:disabled {
 .operations li {
   border: 1px solid var(--border);
   border-radius: 10px;
+  padding: 0;
+}
+
+.operations li.active {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+.operation-button {
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
   padding: 0.7rem;
   display: grid;
   grid-template-columns: 90px 1fr;
   gap: 0.5rem;
+  text-align: left;
 }
 
 .method {
@@ -143,6 +160,10 @@ button:disabled {
 .summary {
   color: var(--muted);
   grid-column: 2;
+}
+
+.method-select {
+  max-width: 130px;
 }
 
 @media (max-width: 700px) {
