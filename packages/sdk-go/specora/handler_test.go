@@ -10,6 +10,44 @@ import (
 	"github.com/sahilkhaire/specora/packages/sdk-go/specora"
 )
 
+func TestHandlerEmbedFromDir(t *testing.T) {
+	dir := t.TempDir()
+	manifest := `{"version":"0.1.0","indexHtml":"index.html"}`
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	indexHTML := `<!DOCTYPE html><html><head></head><body>embed</body></html>`
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte(indexHTML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	specPath := filepath.Join(dir, "openapi.json")
+	if err := os.WriteFile(specPath, []byte(`{
+		"openapi": "3.0.3",
+		"info": {"title": "EmbedDir", "version": "1.0.0"},
+		"paths": {}
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := specora.Handler(specora.Config{
+		SpecPath:  specPath,
+		MountPath: "/api-docs",
+		EmbedDir:  dir,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api-docs/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !contains(rec.Body.String(), "__SPECORA_EMBED__") {
+		t.Fatalf("expected embed config injection, got %s", rec.Body.String())
+	}
+}
+
 func TestHandlerOpenAPI(t *testing.T) {
 	dir := t.TempDir()
 	specPath := filepath.Join(dir, "openapi.json")

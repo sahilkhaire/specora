@@ -8,6 +8,10 @@ type Config struct {
 	// MountPath is the URL prefix where docs are served (default /api-docs).
 	MountPath string
 
+	// EmbedDir loads the docs UI from a local directory (e.g. dist/embed/latest from
+	// `npm run publish:embed-cdn`). Overrides CDN when set. Also reads SPECORA_EMBED_DIR.
+	EmbedDir string
+
 	// CdnBase is the Specora embed CDN root (default https://specora.varcore.dev/embed).
 	CdnBase string
 

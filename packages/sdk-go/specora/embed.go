@@ -11,7 +11,7 @@ import (
 )
 
 type embedManifest struct {
-	Version  string `json:"version"`
+	Version   string `json:"version"`
 	IndexHTML string `json:"indexHtml"`
 }
 
@@ -26,6 +26,13 @@ func (c Config) specURL(mount string) string {
 }
 
 func (c Config) fetchEmbedHTML(mount string) (string, error) {
+	if dir := c.embedDir(); dir != "" {
+		return c.loadEmbedFromDir(dir, mount)
+	}
+	return c.fetchEmbedHTMLFromCDN(mount)
+}
+
+func (c Config) fetchEmbedHTMLFromCDN(mount string) (string, error) {
 	base := c.cdnBase()
 	version := c.version()
 	manifestURL := fmt.Sprintf("%s/latest/manifest.json", base)
@@ -41,13 +48,28 @@ func (c Config) fetchEmbedHTML(mount string) (string, error) {
 	}
 	defer manifestResp.Body.Close()
 
+	body, err := io.ReadAll(manifestResp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read embed manifest: %w", err)
+	}
+
 	if manifestResp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("embed manifest HTTP %d from %s", manifestResp.StatusCode, manifestURL)
 	}
 
+	if looksLikeHTML(body) {
+		return "", fmt.Errorf(
+			"embed manifest at %s returned HTML instead of JSON; the embed bundle is likely not deployed. "+
+				"Run `npm run publish:embed-cdn` from the Specora repo and upload dist/embed/ to %s, "+
+				"or set Config.EmbedDir / SPECORA_EMBED_DIR to a local path (e.g. dist/embed/latest)",
+			manifestURL,
+			base,
+		)
+	}
+
 	var manifest embedManifest
-	if err := json.NewDecoder(manifestResp.Body).Decode(&manifest); err != nil {
-		return "", fmt.Errorf("decode embed manifest: %w", err)
+	if err := json.Unmarshal(body, &manifest); err != nil {
+		return "", fmt.Errorf("decode embed manifest from %s: %w", manifestURL, err)
 	}
 
 	indexPath := manifest.IndexHTML
@@ -75,28 +97,12 @@ func (c Config) fetchEmbedHTML(mount string) (string, error) {
 		return "", fmt.Errorf("read embed index: %w", err)
 	}
 
-	cfg := map[string]any{
-		"surface":      "embed",
-		"specUrl":      c.specURL(mount),
-		"mountPath":    mount,
-		"publicFilter": c.PublicFilter,
-		"includeAll":   c.IncludeAll,
-	}
-	if c.PublicFilter == "" && !c.IncludeAll {
-		cfg["publicFilter"] = "tag:public"
-	}
+	return injectEmbedConfig(string(indexHTML), c, mount)
+}
 
-	cfgJSON, err := json.Marshal(cfg)
-	if err != nil {
-		return "", err
-	}
-
-	injection := fmt.Sprintf("<script>window.__SPECORA_EMBED__=%s;</script>", cfgJSON)
-	html := string(indexHTML)
-	if strings.Contains(html, "</head>") {
-		return strings.Replace(html, "</head>", injection+"</head>", 1), nil
-	}
-	return injection + html, nil
+func looksLikeHTML(body []byte) bool {
+	trimmed := strings.TrimSpace(string(body))
+	return strings.HasPrefix(trimmed, "<") || strings.HasPrefix(strings.ToLower(trimmed), "<!doctype")
 }
 
 func (ui *embedUI) load(cfg Config, mount string) {

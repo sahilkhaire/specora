@@ -48,8 +48,9 @@ http.Handle("/api-docs/", specora.Handler(...)) // correct
 
 | Field | Description | Default |
 |-------|-------------|---------|
-| `SpecPath` | Path to `openapi.yaml` or `swagger.json` | required |
+| `SpecPath` | Path or `https://` URL to OpenAPI / Swagger JSON or YAML | required |
 | `MountPath` | URL prefix for docs | `/api-docs` |
+| `EmbedDir` | Local embed bundle dir (`manifest.json` + `index.html`) | CDN |
 | `CdnBase` | Embed CDN root | `https://specora.varcore.dev/embed` |
 | `Version` | Bundle version (`latest` or `0.1.0`) | `latest` |
 | `PublicFilter` | `tag:public`, `extension`, `no-security`, `all` | `tag:public` |
@@ -77,12 +78,29 @@ e.Any("/api-docs/*", echo.WrapHandler(specora.Handler(specora.Config{SpecPath: "
 
 ## Local development (this monorepo)
 
+The hosted CDN serves the main app; the **embed bundle** must exist under `/embed/latest/` (or use a local copy).
+
 ```bash
+# From repo root — build embed UI into dist/embed/latest
+npm run publish:embed-cdn
+
 cd packages/sdk-go
 go mod tidy
 go test ./...
-go run ./example/main.go /path/to/openapi.yaml
+go run ./example/main.go
+go run ./example/main.go https://petstore.swagger.io/v2/swagger.json
 ```
+
+Or point at the bundle explicitly:
+
+```bash
+export SPECORA_EMBED_DIR=../../dist/embed/latest   # from packages/sdk-go
+go run ./example/main.go ./openapi.yaml
+```
+
+### `decode embed manifest: invalid character '<'`
+
+The CDN returned HTML (usually the SPA `index.html`) because `manifest.json` is not deployed yet. Use `EmbedDir` / `SPECORA_EMBED_DIR` with `dist/embed/latest`, or upload `dist/embed/` to your host at `/embed/`.
 
 ## Publishing releases (maintainers)
 
