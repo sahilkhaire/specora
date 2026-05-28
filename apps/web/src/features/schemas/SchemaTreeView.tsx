@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import type { SchemaFieldKind, SchemaFieldNode } from "./schema-samples";
 
 const TYPE_ICONS: Record<SchemaFieldKind, string> = {
@@ -12,6 +12,48 @@ const TYPE_ICONS: Record<SchemaFieldKind, string> = {
   union: "∪",
   unknown: "?"
 };
+
+const MAX_ENUM_VISIBLE = 10;
+
+function SchemaEnumValues({ values, depth }: { values: string[]; depth: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const overflow = values.length > MAX_ENUM_VISIBLE;
+  const visible = expanded || !overflow ? values : values.slice(0, MAX_ENUM_VISIBLE);
+
+  return (
+    <div
+      className="schema-tree-enums"
+      style={{ paddingLeft: `calc(${depth} * 14px + 2.6rem)` }}
+      role="list"
+      aria-label="Allowed enum values"
+    >
+      <span className="schema-tree-enum-label">enum</span>
+      {visible.map((value) => (
+        <span key={value} className="schema-tree-enum-value" role="listitem" title={value}>
+          {value}
+        </span>
+      ))}
+      {overflow && !expanded ? (
+        <button
+          type="button"
+          className="schema-tree-enum-more"
+          onClick={() => setExpanded(true)}
+        >
+          +{values.length - MAX_ENUM_VISIBLE} more
+        </button>
+      ) : null}
+      {overflow && expanded ? (
+        <button
+          type="button"
+          className="schema-tree-enum-more"
+          onClick={() => setExpanded(false)}
+        >
+          Show less
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 function SchemaTreeNode({
   node,
@@ -28,7 +70,10 @@ function SchemaTreeNode({
 
   return (
     <li className="schema-tree-node">
-      <div className="schema-tree-row" style={{ "--depth": depth } as React.CSSProperties}>
+      <div
+        className="schema-tree-row"
+        style={{ "--depth": depth } as CSSProperties & Record<"--depth", number>}
+      >
         {hasChildren ? (
           <button
             type="button"
@@ -50,13 +95,18 @@ function SchemaTreeNode({
           {node.type}
           {node.format ? <span className="schema-tree-format">{node.format}</span> : null}
         </span>
-        {node.ref ? <span className="schema-tree-ref">{node.ref}</span> : null}
-        {node.preview !== undefined ? (
+        {node.ref && !node.enumValues?.length ? (
+          <span className="schema-tree-ref">{node.ref}</span>
+        ) : null}
+        {node.preview !== undefined && !node.enumValues?.length ? (
           <code className="schema-tree-preview" title="Template value">
             {node.preview}
           </code>
         ) : null}
       </div>
+      {node.enumValues?.length ? (
+        <SchemaEnumValues values={node.enumValues} depth={depth} />
+      ) : null}
       {node.description ? (
         <p
           className="schema-tree-desc"

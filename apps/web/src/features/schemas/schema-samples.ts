@@ -157,7 +157,66 @@ export interface SchemaFieldNode {
   ref?: string;
   format?: string;
   preview?: string;
+  /** Allowed values when the schema defines `enum` or `const`. */
+  enumValues?: string[];
   children?: SchemaFieldNode[];
+}
+
+export function extractEnumValues(schema: Record<string, unknown>): string[] | undefined {
+  if (schema.const !== undefined && schema.const !== null) {
+    const value =
+      typeof schema.const === "string" ? schema.const : JSON.stringify(schema.const);
+    return [value];
+  }
+
+  if (!Array.isArray(schema.enum) || schema.enum.length === 0) return undefined;
+
+  const values = schema.enum
+    .filter((v) => v !== undefined)
+    .map((v) => {
+      if (v === null) return "null";
+      if (typeof v === "string") return v;
+      return JSON.stringify(v);
+    });
+
+  return values.length > 0 ? values : undefined;
+}
+
+function enumValuesForSchema(
+  spec: Record<string, unknown>,
+  schema: Record<string, unknown>
+): string[] | undefined {
+  const direct = extractEnumValues(schema);
+  if (direct) return direct;
+
+  if (typeof schema.$ref === "string") {
+    const resolved = resolveRef(spec, schema.$ref);
+    if (resolved && typeof resolved === "object") {
+      return extractEnumValues(resolved as Record<string, unknown>);
+    }
+  }
+
+  return undefined;
+}
+
+function typeLabelForField(
+  propRecord: Record<string, unknown>,
+  refFull: string | undefined,
+  enumValues: string[] | undefined
+): string {
+  const base =
+    typeof propRecord.type === "string"
+      ? propRecord.type
+      : refFull
+        ? shortSchemaName(refFull)
+        : enumValues
+          ? "enum"
+          : "object";
+
+  if (enumValues?.length) {
+    return enumValues.length === 1 ? `${base} · const` : `${base} · enum`;
+  }
+  return base;
 }
 
 export function shortSchemaName(name: string): string {
@@ -267,15 +326,21 @@ export function buildSchemaTree(
   const type = typeof s.type === "string" ? s.type : "object";
 
   if (type === "array" || s.items) {
+    const itemSchema =
+      s.items && typeof s.items === "object" ? (s.items as Record<string, unknown>) : {};
+    const itemEnums = enumValuesForSchema(spec, itemSchema);
     return [
       {
         name: "items",
-        type: "array",
+        type: itemEnums ? `array · enum` : "array",
         kind: "array",
         required: false,
         description: typeof s.description === "string" ? s.description : "",
         preview: nodePreview(spec, s, mode),
-        children: buildSchemaTree(spec, s.items ?? {}, depth + 1, visited, mode)
+        enumValues: itemEnums,
+        children: itemEnums
+          ? undefined
+          : buildSchemaTree(spec, s.items ?? {}, depth + 1, visited, mode)
       }
     ];
   }
@@ -291,20 +356,23 @@ export function buildSchemaTree(
         prop && typeof prop === "object" ? (prop as Record<string, unknown>) : {};
       const refFull =
         typeof propRecord.$ref === "string" ? refName(String(propRecord.$ref)) : undefined;
-      const propType =
+      const enumValues = enumValuesForSchema(spec, propRecord);
+      const propType = typeLabelForField(propRecord, refFull, enumValues);
+      const hasNested =
+        (propRecord.properties ||
+          propRecord.items ||
+          propRecord.$ref ||
+          propRecord.oneOf ||
+          propRecord.anyOf) &&
+        !enumValues;
+      const kind = inferKind(
         typeof propRecord.type === "string"
           ? propRecord.type
-          : refFull
-            ? shortSchemaName(refFull)
-            : "object";
-      const hasNested =
-        propRecord.properties ||
-        propRecord.items ||
-        propRecord.$ref ||
-        propRecord.oneOf ||
-        propRecord.anyOf;
-      const kind = inferKind(
-        typeof propRecord.type === "string" ? propRecord.type : refFull ? "ref" : "object",
+          : enumValues
+            ? "string"
+            : refFull
+              ? "ref"
+              : "object",
         Boolean(hasNested)
       );
       return {
@@ -315,19 +383,23 @@ export function buildSchemaTree(
         description: typeof propRecord.description === "string" ? propRecord.description : "",
         ref: refFull,
         format: typeof propRecord.format === "string" ? propRecord.format : undefined,
+        enumValues,
         preview: hasNested ? undefined : nodePreview(spec, prop, mode),
         children: hasNested ? buildSchemaTree(spec, prop, depth + 1, new Set(visited), mode) : undefined
       };
     });
   }
 
+  const enumValues = enumValuesForSchema(spec, s);
+
   return [
     {
       name: "(value)",
-      type,
+      type: enumValues ? typeLabelForField(s, undefined, enumValues) : type,
       kind: inferKind(type, false),
       required: false,
       description: typeof s.description === "string" ? s.description : "",
+      enumValues,
       preview: nodePreview(spec, s, mode)
     }
   ];

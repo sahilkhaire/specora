@@ -3856,6 +3856,53 @@ button.tryout-ghost-btn:hover:not(:disabled) {
   justify-self: end;
 }
 
+.schema-tree-enums {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.35rem;
+  margin: 0.1rem 0 0.35rem;
+  padding-right: var(--space-2);
+}
+
+.schema-tree-enum-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-subtle);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, #f59e0b 16%, transparent);
+  border: 1px solid color-mix(in srgb, #f59e0b 35%, var(--border));
+  flex-shrink: 0;
+}
+
+.schema-tree-enum-value {
+  font-family: ui-monospace, monospace;
+  font-size: 0.62rem;
+  color: #fcd34d;
+  background: color-mix(in srgb, #f59e0b 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, #f59e0b 28%, var(--border));
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schema-tree-enum-more {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  padding: 0;
+}
+
 .schema-tree-desc {
   margin: 0 0 var(--space-1);
   padding-left: calc(var(--depth, 0) * 14px + 2.6rem);

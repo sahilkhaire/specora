@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSchemaTree,
   countSchemaTree,
+  extractEnumValues,
   generateSampleValue,
   sampleToJson,
   shortSchemaName
@@ -64,5 +65,36 @@ describe("schema-samples", () => {
     const tree = buildSchemaTree(spec, { $ref: "#/components/schemas/Pet" });
     expect(countSchemaTree(tree).fields).toBe(3);
     expect(countSchemaTree(tree).required).toBe(1);
+  });
+
+  it("extracts enum values including const", () => {
+    expect(extractEnumValues({ enum: ["draft", "published"] })).toEqual(["draft", "published"]);
+    expect(extractEnumValues({ const: "active" })).toEqual(["active"]);
+  });
+
+  it("shows enum values on structure tree nodes", () => {
+    const tree = buildSchemaTree(spec, { $ref: "#/components/schemas/Pet" });
+    const tagNode = tree.find((n) => n.name === "tag");
+    expect(tagNode?.enumValues).toEqual(["dog", "cat"]);
+    expect(tagNode?.type).toContain("enum");
+  });
+
+  it("resolves enum from referenced schema", () => {
+    const specWithStatus = {
+      ...spec,
+      components: {
+        schemas: {
+          ...((spec.components as { schemas: Record<string, unknown> }).schemas),
+          Status: { type: "string", enum: ["open", "closed"] }
+        }
+      }
+    };
+    const tree = buildSchemaTree(specWithStatus, {
+      type: "object",
+      properties: {
+        status: { $ref: "#/components/schemas/Status" }
+      }
+    });
+    expect(tree.find((n) => n.name === "status")?.enumValues).toEqual(["open", "closed"]);
   });
 });
