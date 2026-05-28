@@ -11,6 +11,10 @@ const operations: OperationItem[] = [
     summary: "Public",
     operationId: "",
     tags: ["public"],
+    description: "",
+    parameters: [],
+    requestBody: null,
+    searchTextLower: "get /public public"
   },
   {
     key: "GET:/internal:",
@@ -19,6 +23,10 @@ const operations: OperationItem[] = [
     summary: "Internal",
     operationId: "",
     tags: ["admin"],
+    description: "",
+    parameters: [],
+    requestBody: null,
+    searchTextLower: "get /internal internal"
   },
 ];
 
