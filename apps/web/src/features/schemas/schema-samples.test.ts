@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildSchemaTree, generateSampleValue, sampleToJson } from "./schema-samples";
+import {
+  buildSchemaTree,
+  countSchemaTree,
+  generateSampleValue,
+  sampleToJson,
+  shortSchemaName
+} from "./schema-samples";
 
 const spec = {
   openapi: "3.0.3",
@@ -47,5 +53,16 @@ describe("schema-samples", () => {
     const tree = buildSchemaTree(spec, { $ref: "#/components/schemas/Pet" });
     const nameNode = tree.find((n) => n.name === "name");
     expect(nameNode?.required).toBe(true);
+    expect(nameNode?.kind).toBe("string");
+  });
+
+  it("shortens dotted schema names", () => {
+    expect(shortSchemaName("CAMPAIGN.CAMPAIGN_AUDIENCEINPUT")).toBe("CAMPAIGN_AUDIENCE");
+  });
+
+  it("counts fields in tree", () => {
+    const tree = buildSchemaTree(spec, { $ref: "#/components/schemas/Pet" });
+    expect(countSchemaTree(tree).fields).toBe(3);
+    expect(countSchemaTree(tree).required).toBe(1);
   });
 });

@@ -137,20 +137,71 @@ export function sampleToJson(
   }
 }
 
+export type SchemaFieldKind =
+  | "object"
+  | "array"
+  | "string"
+  | "number"
+  | "integer"
+  | "boolean"
+  | "ref"
+  | "union"
+  | "unknown";
+
 export interface SchemaFieldNode {
   name: string;
   type: string;
+  kind: SchemaFieldKind;
   required: boolean;
   description: string;
   ref?: string;
+  format?: string;
+  preview?: string;
   children?: SchemaFieldNode[];
+}
+
+export function shortSchemaName(name: string): string {
+  if (!name) return name;
+  const segment = name.includes(".") ? name.split(".").pop() ?? name : name;
+  return segment.replace(/Input$/i, "").replace(/Output$/i, "") || segment;
+}
+
+function inferKind(type: string, hasChildren: boolean): SchemaFieldKind {
+  if (hasChildren && type === "array") return "array";
+  if (hasChildren) return "object";
+  if (type === "string") return "string";
+  if (type === "integer") return "integer";
+  if (type === "number") return "number";
+  if (type === "boolean") return "boolean";
+  if (type === "ref") return "ref";
+  if (type.startsWith("oneOf") || type.startsWith("anyOf")) return "union";
+  return "unknown";
+}
+
+function formatPreview(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "object") {
+    if (Array.isArray(value)) return value.length === 0 ? "[]" : `[${value.length}]`;
+    return undefined;
+  }
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.length > 28 ? `${text.slice(0, 25)}…` : text;
+}
+
+function nodePreview(
+  spec: Record<string, unknown>,
+  prop: unknown,
+  mode: SampleMode
+): string | undefined {
+  return formatPreview(generateSampleValue(spec, prop, mode));
 }
 
 export function buildSchemaTree(
   spec: Record<string, unknown>,
   schema: unknown,
   depth = 0,
-  visited = new Set<string>()
+  visited = new Set<string>(),
+  mode: SampleMode = "empty"
 ): SchemaFieldNode[] {
   if (depth > 10 || !schema || typeof schema !== "object") return [];
 
@@ -159,14 +210,32 @@ export function buildSchemaTree(
   if (typeof s.$ref === "string") {
     const ref = s.$ref;
     if (visited.has(ref)) {
-      return [{ name: refName(ref), type: "ref", required: false, description: "Circular reference" }];
+      return [
+        {
+          name: shortSchemaName(refName(ref)),
+          type: "ref",
+          kind: "ref",
+          required: false,
+          description: "Circular reference",
+          ref: refName(ref)
+        }
+      ];
     }
     visited.add(ref);
     const resolved = resolveRef(spec, ref);
     if (!resolved) {
-      return [{ name: refName(ref), type: "ref", required: false, description: "Unresolved $ref" }];
+      return [
+        {
+          name: shortSchemaName(refName(ref)),
+          type: "ref",
+          kind: "ref",
+          required: false,
+          description: "Unresolved $ref",
+          ref: refName(ref)
+        }
+      ];
     }
-    return buildSchemaTree(spec, resolved, depth, visited);
+    return buildSchemaTree(spec, resolved, depth, visited, mode);
   }
 
   if (Array.isArray(s.oneOf) && s.oneOf.length > 0) {
@@ -174,9 +243,10 @@ export function buildSchemaTree(
       {
         name: "oneOf",
         type: `oneOf (${s.oneOf.length})`,
+        kind: "union",
         required: false,
         description: "First variant shown",
-        children: buildSchemaTree(spec, s.oneOf[0], depth + 1, visited)
+        children: buildSchemaTree(spec, s.oneOf[0], depth + 1, visited, mode)
       }
     ];
   }
@@ -186,9 +256,10 @@ export function buildSchemaTree(
       {
         name: "anyOf",
         type: `anyOf (${s.anyOf.length})`,
+        kind: "union",
         required: false,
         description: "",
-        children: buildSchemaTree(spec, s.anyOf[0], depth + 1, visited)
+        children: buildSchemaTree(spec, s.anyOf[0], depth + 1, visited, mode)
       }
     ];
   }
@@ -198,11 +269,13 @@ export function buildSchemaTree(
   if (type === "array" || s.items) {
     return [
       {
-        name: "[]",
+        name: "items",
         type: "array",
+        kind: "array",
         required: false,
         description: typeof s.description === "string" ? s.description : "",
-        children: buildSchemaTree(spec, s.items ?? {}, depth + 1, visited)
+        preview: nodePreview(spec, s, mode),
+        children: buildSchemaTree(spec, s.items ?? {}, depth + 1, visited, mode)
       }
     ];
   }
@@ -216,11 +289,13 @@ export function buildSchemaTree(
     return Object.entries(s.properties as Record<string, unknown>).map(([name, prop]) => {
       const propRecord =
         prop && typeof prop === "object" ? (prop as Record<string, unknown>) : {};
+      const refFull =
+        typeof propRecord.$ref === "string" ? refName(String(propRecord.$ref)) : undefined;
       const propType =
         typeof propRecord.type === "string"
           ? propRecord.type
-          : propRecord.$ref
-            ? refName(String(propRecord.$ref))
+          : refFull
+            ? shortSchemaName(refFull)
             : "object";
       const hasNested =
         propRecord.properties ||
@@ -228,13 +303,20 @@ export function buildSchemaTree(
         propRecord.$ref ||
         propRecord.oneOf ||
         propRecord.anyOf;
+      const kind = inferKind(
+        typeof propRecord.type === "string" ? propRecord.type : refFull ? "ref" : "object",
+        Boolean(hasNested)
+      );
       return {
         name,
         type: propType,
+        kind,
         required: requiredSet.has(name),
         description: typeof propRecord.description === "string" ? propRecord.description : "",
-        ref: typeof propRecord.$ref === "string" ? refName(propRecord.$ref) : undefined,
-        children: hasNested ? buildSchemaTree(spec, prop, depth + 1, new Set(visited)) : undefined
+        ref: refFull,
+        format: typeof propRecord.format === "string" ? propRecord.format : undefined,
+        preview: hasNested ? undefined : nodePreview(spec, prop, mode),
+        children: hasNested ? buildSchemaTree(spec, prop, depth + 1, new Set(visited), mode) : undefined
       };
     });
   }
@@ -243,8 +325,28 @@ export function buildSchemaTree(
     {
       name: "(value)",
       type,
+      kind: inferKind(type, false),
       required: false,
-      description: typeof s.description === "string" ? s.description : ""
+      description: typeof s.description === "string" ? s.description : "",
+      preview: nodePreview(spec, s, mode)
     }
   ];
+}
+
+export function countSchemaTree(nodes: SchemaFieldNode[]): { fields: number; required: number } {
+  let fields = 0;
+  let required = 0;
+
+  const walk = (list: SchemaFieldNode[]) => {
+    for (const node of list) {
+      if (node.name !== "items" && node.name !== "oneOf" && node.name !== "anyOf") {
+        fields += 1;
+        if (node.required) required += 1;
+      }
+      if (node.children?.length) walk(node.children);
+    }
+  };
+
+  walk(nodes);
+  return { fields, required };
 }

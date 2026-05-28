@@ -1,13 +1,16 @@
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import type { OperationItem, UsedSchemaDetail } from "@/features/spec/spec-utils";
 import { Badge } from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
 import { getOperationPayloads, getPrimaryRequestBodySchema } from "./operation-payloads";
 import {
   buildSchemaTree,
+  countSchemaTree,
   sampleToJson,
   type SampleMode
 } from "./schema-samples";
+import { copyInsightText, filterInsightParameters, mediaTypeLabel } from "./schema-insight-utils";
 import { SchemaTreeView } from "./SchemaTreeView";
 
 function methodTone(method: string): string {
@@ -63,13 +66,19 @@ export function OperationInsightPanel({
 
   const requestTree = useMemo(() => {
     if (!activeRequest?.schema) return [];
-    return buildSchemaTree(spec, activeRequest.schema);
-  }, [activeRequest?.schema, spec]);
+    return buildSchemaTree(spec, activeRequest.schema, 0, new Set(), sampleMode);
+  }, [activeRequest?.schema, sampleMode, spec]);
 
   const responseTree = useMemo(() => {
     if (!activeResponse?.schema) return [];
-    return buildSchemaTree(spec, activeResponse.schema);
-  }, [activeResponse?.schema, spec]);
+    return buildSchemaTree(spec, activeResponse.schema, 0, new Set(), sampleMode);
+  }, [activeResponse?.schema, sampleMode, spec]);
+
+  const requestTreeStats = useMemo(() => countSchemaTree(requestTree), [requestTree]);
+  const visibleParameters = useMemo(
+    () => filterInsightParameters(payloads),
+    [payloads]
+  );
 
   const primaryBodySchema = useMemo(() => getPrimaryRequestBodySchema(payloads), [payloads]);
 
@@ -101,11 +110,11 @@ export function OperationInsightPanel({
         </dl>
       </section>
 
-      {payloads.parameters.length > 0 ? (
+      {visibleParameters.length > 0 ? (
         <section className="insight-section">
           <h3 className="insight-section-title">Parameters</h3>
           <div className="insight-param-grid">
-            {payloads.parameters.map((param) => (
+            {visibleParameters.map((param) => (
               <div key={`${param.in}-${param.name}`} className="insight-param-card">
                 <span className="insight-param-in">{param.in}</span>
                 <span className="insight-param-name">{param.name}</span>
@@ -154,7 +163,7 @@ export function OperationInsightPanel({
                 className={index === requestTab ? "active" : ""}
                 onClick={() => setRequestTab(index)}
               >
-                {body.mediaType ?? "body"}
+                {mediaTypeLabel(body.mediaType)}
               </button>
             ))}
           </div>
@@ -163,22 +172,42 @@ export function OperationInsightPanel({
               {activeRequest.description ? (
                 <p className="insight-slot-desc">{activeRequest.description}</p>
               ) : null}
-              <div className="insight-schema-layout">
+              <div className="insight-schema-layout insight-schema-layout--stacked">
                 <div className="insight-schema-structure">
-                  <h4>Structure</h4>
+                  <div className="insight-sample-head">
+                    <h4>Structure</h4>
+                    <div className="insight-structure-stats">
+                      <span>{requestTreeStats.fields} fields</span>
+                      <span>{requestTreeStats.required} required</span>
+                    </div>
+                  </div>
                   <SchemaTreeView nodes={requestTree} />
                 </div>
                 <div className="insight-schema-sample">
                   <div className="insight-sample-head">
                     <h4>JSON payload</h4>
-                    {onApplyRequestBody && requestSample ? (
-                      <Button
-                        variant="secondary"
-                        onClick={() => onApplyRequestBody(requestSample)}
-                      >
-                        Use in request
-                      </Button>
-                    ) : null}
+                    <div className="insight-sample-actions">
+                      {requestSample ? (
+                        <button
+                          type="button"
+                          className="insight-ghost-btn"
+                          onClick={async () => {
+                            const ok = await copyInsightText(requestSample);
+                            if (ok) toast.success("JSON copied");
+                          }}
+                        >
+                          Copy
+                        </button>
+                      ) : null}
+                      {onApplyRequestBody && requestSample ? (
+                        <Button
+                          variant="secondary"
+                          onClick={() => onApplyRequestBody(requestSample)}
+                        >
+                          Use in request
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                   <pre className="insight-json-preview">{requestSample || "{}"}</pre>
                 </div>
