@@ -5,6 +5,10 @@ export interface DeploymentConfig {
   mode: DeploymentMode;
   surface: AppSurface;
   apiBaseUrl: string;
+  /** POST endpoint that forwards try-out requests server-side (avoids browser CORS). */
+  tryoutProxyUrl: string;
+  /** When true, try-out sends via tryoutProxyUrl instead of calling APIs directly from the browser. */
+  tryoutUseProxy: boolean;
   enableSaasAuth: boolean;
   embedCdnBase: string;
   /** Parent domain for published docs subdomains, e.g. `acme.docs.varcore.dev`. */
@@ -33,10 +37,21 @@ export function getDeploymentConfig(): DeploymentConfig {
   const surface: AppSurface =
     surfaceRaw === "docs" || surfaceRaw === "embed" ? surfaceRaw : "full";
 
+  const apiBaseUrl = envString("VITE_API_BASE_URL", "");
+  const tryoutProxyUrl =
+    envString("VITE_TRYOUT_PROXY_URL", "") ||
+    (apiBaseUrl ? `${apiBaseUrl.replace(/\/$/, "")}/proxy` : "http://localhost:8787/proxy");
+  const tryoutUseProxy = envBool(
+    "VITE_TRYOUT_USE_PROXY",
+    Boolean(apiBaseUrl) || import.meta.env.PROD
+  );
+
   return {
     mode,
     surface,
-    apiBaseUrl: envString("VITE_API_BASE_URL", ""),
+    apiBaseUrl,
+    tryoutProxyUrl,
+    tryoutUseProxy,
     enableSaasAuth: envBool("VITE_ENABLE_SAAS_AUTH", false),
     embedCdnBase: envString(
       "VITE_EMBED_CDN_BASE",

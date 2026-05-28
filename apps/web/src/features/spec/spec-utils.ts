@@ -120,30 +120,32 @@ export interface UsedSchemaDetail {
   source: "component" | "inline";
 }
 
-export function groupOperationsByTags(operations: OperationItem[]): TagGroup[] {
+export function groupOperationsByTags(
+  operations: OperationItem[],
+  searchQuery = ""
+): TagGroup[] {
+  const query = searchQuery.trim().toLowerCase();
   const tagMap = new Map<string, OperationItem[]>();
 
   operations.forEach((operation) => {
-    if (operation.tags.length === 0) {
-      // Operations without tags go into "Untagged" group
-      const untaggedOps = tagMap.get("Untagged") ?? [];
-      untaggedOps.push(operation);
-      tagMap.set("Untagged", untaggedOps);
-    } else {
-      // Add operation to each of its tags
-      operation.tags.forEach((tag) => {
-        const tagOps = tagMap.get(tag) ?? [];
-        tagOps.push(operation);
-        tagMap.set(tag, tagOps);
-      });
-    }
+    const tags = operation.tags.length === 0 ? ["Untagged"] : operation.tags;
+    const anyTagMatchesQuery =
+      query.length > 0 && tags.some((tag) => tag.toLowerCase().includes(query));
+
+    tags.forEach((tag) => {
+      if (anyTagMatchesQuery && !tag.toLowerCase().includes(query)) {
+        return;
+      }
+      const tagOps = tagMap.get(tag) ?? [];
+      tagOps.push(operation);
+      tagMap.set(tag, tagOps);
+    });
   });
 
-  // Convert map to array and sort by tag name
   return Array.from(tagMap.entries())
     .map(([tag, ops]) => ({ tag, operations: ops }))
+    .filter((group) => group.operations.length > 0)
     .sort((a, b) => {
-      // "Untagged" goes to the end
       if (a.tag === "Untagged") return 1;
       if (b.tag === "Untagged") return -1;
       return a.tag.localeCompare(b.tag);

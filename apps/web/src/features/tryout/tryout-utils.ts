@@ -190,7 +190,9 @@ export function mapTryoutSendError(error: unknown, useProxy: boolean): string {
   }
 
   if (normalized.includes("cors")) {
-    return "CORS blocked the request. Next step: enable CORS on the API or use the local proxy mode.";
+    return useProxy
+      ? "CORS blocked the proxy request. Next step: add your app origin to API CORS_ORIGIN."
+      : "CORS blocked the request. Next step: enable Proxy in Try Out (uses your Specora server) or enable CORS on the target API.";
   }
 
   if (

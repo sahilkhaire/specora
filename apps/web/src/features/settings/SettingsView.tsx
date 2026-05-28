@@ -124,12 +124,12 @@ export function SettingsView({
       <div className="panel-card">
         <h2>Proxy Settings</h2>
         <p className="text-muted">
-          Configure a local proxy to bypass CORS restrictions when testing APIs
+          Route try-out requests through your Specora server to avoid browser CORS limits
         </p>
 
         <div className="setting-item">
           <label className="inline-switch">
-            <span>Enable Local Proxy</span>
+            <span>Enable try-out proxy</span>
             <input
               type="checkbox"
               checked={useProxy}
@@ -150,7 +150,7 @@ export function SettingsView({
               />
             </label>
             <p className="help-text">
-              Make sure your proxy server is running at this URL
+              Defaults to your API POST /proxy endpoint. Local dev: run `specora proxy` on port 8787.
             </p>
           </div>
         )}

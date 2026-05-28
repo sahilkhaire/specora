@@ -1,3 +1,4 @@
+import { fetchViaTryoutProxy } from "@/features/http/proxy-client";
 import {
   applyVariables,
   buildAuthHeaders,
@@ -92,35 +93,12 @@ async function executeStep(
 
   try {
     if (config.useProxy) {
-      const proxyResponse = await fetch(config.proxyUrl, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          url: targetUrl,
-          method,
-          headers: mergedHeaders,
-          body,
-        }),
+      const payload = await fetchViaTryoutProxy(config.proxyUrl, {
+        url: targetUrl,
+        method,
+        headers: mergedHeaders,
+        body: body ?? null
       });
-
-      const payload = await proxyResponse.json() as {
-        ok: boolean;
-        status: number;
-        body: string;
-        error?: string;
-      };
-
-      if (!proxyResponse.ok || !payload.ok) {
-        return {
-          stepId: step.id,
-          operationKey: step.operationKey,
-          ok: false,
-          status: payload.status,
-          durationMs: Math.round(performance.now() - start),
-          responseBody: payload.body ?? "",
-          error: payload.error ?? `Proxy failed with HTTP ${proxyResponse.status}`,
-        };
-      }
 
       return {
         stepId: step.id,

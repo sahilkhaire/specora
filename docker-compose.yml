@@ -8,7 +8,7 @@ services:
     environment:
       PORT: "8788"
       DATABASE_URL: "file:/data/specora.db"
-      CORS_ORIGIN: "http://localhost:5173"
+      CORS_ORIGIN: "http://localhost:5173,http://localhost:80"
       SPECORA_ADMIN_PASSWORD: "${SPECORA_ADMIN_PASSWORD:-specora-admin}"
       INSTANCE_BASE_DOMAIN: "${INSTANCE_BASE_DOMAIN:-localhost}"
     volumes:

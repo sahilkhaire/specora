@@ -1,5 +1,6 @@
 import type { Environment } from "@/features/environments/env-types";
 import type { SavedRequest } from "@/features/collections/collection-types";
+import { fetchViaTryoutProxy } from "@/features/http/proxy-client";
 import {
   applyVariables,
   buildAuthHeaders,
@@ -79,28 +80,32 @@ export async function executeRequest(options: ExecuteRequestOptions): Promise<Ex
   }
 
   try {
-    let response: Response;
+    const durationMs = () => Math.round(performance.now() - started);
+
     if (useProxy) {
-      response = await fetch(proxyUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: fullUrl,
-          method: request.method,
-          headers,
-          body: body ?? null
-        })
-      });
-    } else {
-      response = await fetch(fullUrl, {
+      const payload = await fetchViaTryoutProxy(proxyUrl, {
+        url: fullUrl,
         method: request.method,
         headers,
-        body: body && request.method !== "GET" && request.method !== "HEAD" ? body : undefined
+        body: body ?? null
       });
+
+      return {
+        ok: payload.status >= 200 && payload.status < 300,
+        status: payload.status,
+        durationMs: durationMs(),
+        responseBody: payload.body,
+        responseHeaders: payload.headers
+      };
     }
 
+    const response = await fetch(fullUrl, {
+      method: request.method,
+      headers,
+      body: body && request.method !== "GET" && request.method !== "HEAD" ? body : undefined
+    });
+
     const text = await response.text();
-    const durationMs = Math.round(performance.now() - started);
     const responseHeaders: Record<string, string> = {};
     response.headers.forEach((value, key) => {
       responseHeaders[key] = value;
@@ -109,7 +114,7 @@ export async function executeRequest(options: ExecuteRequestOptions): Promise<Ex
     return {
       ok: response.ok,
       status: response.status,
-      durationMs,
+      durationMs: durationMs(),
       responseBody: text,
       responseHeaders
     };

@@ -13,7 +13,7 @@ import {
   operationKey,
   setOperationKeyInLocation
 } from "@/features/spec/spec-utils";
-import { isEmbedSurface, isFullAppSurface } from "@/config/deployment";
+import { deploymentConfig, isEmbedSurface, isFullAppSurface } from "@/config/deployment";
 import {
   applyVariables,
   buildRequestUrl,
@@ -30,6 +30,7 @@ import { SettingsView } from "@/features/settings/SettingsView";
 import { useWorkspaces } from "@/features/workspaces/use-workspaces";
 import { ApiClientWorkbench } from "@/app/ApiClientWorkbench";
 import { AppHeader } from "@/app/AppHeader";
+import { fetchViaTryoutProxy } from "@/features/http/proxy-client";
 
 declare global {
   interface Window {
@@ -139,8 +140,8 @@ export function App() {
   const [queryParamsInput, setQueryParamsInput] = useState("{}");
   const [headersInput, setHeadersInput] = useState("{}");
   const [requestBody, setRequestBody] = useState("");
-  const [useProxy, setUseProxy] = useState(false);
-  const [proxyUrl, setProxyUrl] = useState("http://localhost:8787/proxy");
+  const [useProxy, setUseProxy] = useState(deploymentConfig.tryoutUseProxy);
+  const [proxyUrl, setProxyUrl] = useState(deploymentConfig.tryoutProxyUrl);
   const [requestStatus, setRequestStatus] = useState<string>("");
   const [requestResponse, setRequestResponse] = useState("");
   const [requestHeaders, setRequestHeaders] = useState<Record<string, string>>({});
@@ -410,7 +411,10 @@ export function App() {
     return ["ALL", ...Array.from(unique).sort()];
   }, [operations]);
 
-  const tagGroups = useMemo(() => groupOperationsByTags(filteredOperations), [filteredOperations]);
+  const tagGroups = useMemo(
+    () => groupOperationsByTags(filteredOperations, searchTerm),
+    [filteredOperations, searchTerm]
+  );
 
   useEffect(() => {
     if (tagGroups.length === 0) {
@@ -611,30 +615,12 @@ export function App() {
 
     try {
       if (useProxy) {
-        const proxyResponse = await fetch(proxyUrl, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json"
-          },
-          body: JSON.stringify({
-            url: targetUrl,
-            method,
-            headers: mergedHeaders,
-            body
-          })
+        const payload = await fetchViaTryoutProxy(proxyUrl, {
+          url: targetUrl,
+          method,
+          headers: mergedHeaders,
+          body: body ?? null
         });
-
-        const payload = await proxyResponse.json() as {
-          ok: boolean;
-          status: number;
-          headers: Record<string, string>;
-          body: string;
-          error?: string;
-        };
-
-        if (!proxyResponse.ok || !payload.ok) {
-          throw new Error(payload.error ?? `Proxy request failed with HTTP ${proxyResponse.status}`);
-        }
 
         setRequestStatus(`${payload.status}`);
         setRequestHeaders(payload.headers ?? {});

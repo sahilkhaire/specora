@@ -148,6 +148,35 @@ describe("spec-utils", () => {
     expect(grouped[1]?.operations).toHaveLength(1);
   });
 
+  it("hides non-matching tag groups when search matches a tag name", () => {
+    const specWithMultiTag = `
+openapi: 3.0.3
+info:
+  title: Multi-tag API
+  version: 1.0.0
+paths:
+  /pets:
+    get:
+      summary: List pets
+      tags: [pets, admin]
+      responses:
+        "200":
+          description: ok
+`;
+    const parsed = parseSpecText(specWithMultiTag);
+    if (!parsed.ok) {
+      throw new Error(parsed.error);
+    }
+
+    const operations = extractOperations(parsed.spec);
+    const filtered = filterOperations(operations, "ALL", "pets");
+    const grouped = groupOperationsByTags(filtered, "pets");
+
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0]?.tag).toBe("pets");
+    expect(grouped[0]?.operations).toHaveLength(1);
+  });
+
   it("groups operations without tags into 'Untagged'", () => {
     const specWithUntagged = `
 openapi: 3.0.3

@@ -40,12 +40,26 @@ function buildFlatTree(
     const children = childrenOf.get(parentId) ?? [];
     for (const node of children) {
       if (node.kind === "folder") {
-        const matches = !query || node.name.toLowerCase().includes(query);
-        if (matches || query) {
+        if (!query) {
           rows.push({ id: node.id, kind: "folder", depth, name: node.name });
+          if (expanded.has(node.id)) {
+            walk(node.id, depth + 1);
+          }
+          continue;
         }
-        if (expanded.has(node.id) || query) {
-          walk(node.id, depth + 1);
+
+        const folderNameMatches = node.name.toLowerCase().includes(query);
+        const childRowStart = rows.length;
+        walk(node.id, depth + 1);
+        const hasMatchingRequests = rows.length > childRowStart;
+
+        if (folderNameMatches || hasMatchingRequests) {
+          rows.splice(childRowStart, 0, {
+            id: node.id,
+            kind: "folder",
+            depth,
+            name: node.name
+          });
         }
         continue;
       }

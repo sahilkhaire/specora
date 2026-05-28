@@ -6,6 +6,7 @@ import { environmentsRoutes } from "./routes/environments.js";
 import { migrateRoutes } from "./routes/migrate.js";
 import { adminRoutes } from "./routes/admin.js";
 import { publishRoutes } from "./routes/publish.js";
+import { tryoutProxyRoutes } from "./routes/tryout-proxy.js";
 
 export function createApp(): Hono {
   const app = new Hono();
@@ -22,6 +23,7 @@ export function createApp(): Hono {
   );
 
   app.get("/health", (c) => c.json({ ok: true }));
+  app.route("/", tryoutProxyRoutes);
 
   app.route("/auth", authRoutes);
   app.route("/workspaces", workspacesRoutes);
