@@ -1,13 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  clearOperationKeyFromLocation,
   detectDefaultServerUrl,
   extractOperations,
   filterOperations,
   filterPublicOperations,
+  findOperationByKey,
+  getOperationKeyFromLocation,
   getUsedSchemaDetailsForOperation,
   groupOperationsByTags,
   parseSpecText,
-  operationKey
+  operationKey,
+  setOperationKeyInLocation
 } from "@/features/spec/spec-utils";
 import { isEmbedSurface, isFullAppSurface } from "@/config/deployment";
 import {
@@ -19,6 +23,7 @@ import {
   scaffoldFromParameters
 } from "@/features/tryout/tryout-utils";
 import type { AuthConfig, AuthType } from "@/features/tryout/tryout-utils";
+import { TryOutPanel } from "@/features/tryout/TryOutPanel";
 import { useEnvironments } from "@/features/environments/use-environments";
 import { EnvPanel } from "@/features/environments/EnvPanel";
 import { SettingsView } from "@/features/settings/SettingsView";
@@ -75,15 +80,6 @@ function prettyBody(raw: string): string {
   }
 }
 
-function statusTone(status: string): string {
-  const code = Number(status);
-  if (code >= 200 && code < 300) return "status-2xx";
-  if (code >= 300 && code < 400) return "status-3xx";
-  if (code >= 400 && code < 500) return "status-4xx";
-  if (code >= 500) return "status-5xx";
-  return "";
-}
-
 function methodTone(method: string): string {
   if (method === "GET") {
     return "method-badge method-get";
@@ -95,6 +91,10 @@ function methodTone(method: string): string {
 
   if (method === "DELETE") {
     return "method-badge method-delete";
+  }
+
+  if (method === "PUT" || method === "PATCH") {
+    return "method-badge method-put";
   }
 
   return "method-badge method-default";
@@ -114,7 +114,24 @@ export function App() {
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [methodFilter, setMethodFilter] = useState("ALL");
-  const [selectedOperationKey, setSelectedOperationKey] = useState("");
+  const [selectedOperationKey, setSelectedOperationKey] = useState(
+    () => getOperationKeyFromLocation() ?? ""
+  );
+
+  const selectOperation = useCallback((key: string) => {
+    setSelectedOperationKey(key);
+    if (key) {
+      setOperationKeyInLocation(key);
+    } else {
+      clearOperationKeyFromLocation();
+    }
+  }, []);
+
+  const clearSelectedOperation = useCallback(() => {
+    setSelectedOperationKey("");
+    clearOperationKeyFromLocation({ replace: true });
+  }, []);
+
   const [serverUrl, setServerUrl] = useState("");
   const [pathParamsInput, setPathParamsInput] = useState("{}");
   const [queryParamsInput, setQueryParamsInput] = useState("{}");
@@ -293,7 +310,8 @@ export function App() {
       return;
     }
 
-    const workspaceChanged = prevWorkspaceIdRef.current !== activeWorkspace.id;
+    const previousWorkspaceId = prevWorkspaceIdRef.current;
+    const workspaceChanged = previousWorkspaceId !== activeWorkspace.id;
     prevWorkspaceIdRef.current = activeWorkspace.id;
 
     if (activeWorkspace.spec) {
@@ -302,7 +320,9 @@ export function App() {
       setSpec(null);
     }
 
-    setSelectedOperationKey("");
+    if (workspaceChanged && previousWorkspaceId !== "") {
+      clearSelectedOperation();
+    }
     setError("");
 
     if (!activeWorkspace.specSource) {
@@ -321,7 +341,7 @@ export function App() {
 
     setRawInput(activeWorkspace.specSource.value);
     setUrlInput("");
-  }, [activeWorkspaceId, activeWorkspace]);
+  }, [activeWorkspaceId, activeWorkspace, clearSelectedOperation]);
 
   const operations = useMemo(() => {
     if (!spec) return [];
@@ -334,14 +354,32 @@ export function App() {
   const filteredOperations = useMemo(() => filterOperations(operations, methodFilter, searchTerm), [operations, searchTerm, methodFilter]);
 
   const selectedOperation = useMemo(() => {
-    if (!selectedOperationKey) {
-      return filteredOperations[0] ?? null;
+    if (!operations.length) {
+      return null;
     }
 
-    return filteredOperations.find((operation) => {
-      return operation.key === selectedOperationKey;
-    }) ?? filteredOperations[0] ?? null;
-  }, [filteredOperations, selectedOperationKey]);
+    if (selectedOperationKey) {
+      const match = findOperationByKey(operations, selectedOperationKey);
+      if (match) {
+        return match;
+      }
+    }
+
+    return filteredOperations[0] ?? operations[0] ?? null;
+  }, [operations, filteredOperations, selectedOperationKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const onPopState = () => {
+      setSelectedOperationKey(getOperationKeyFromLocation() ?? "");
+    };
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   const methods = useMemo(() => {
     const unique = new Set(operations.map((operation) => operation.method));
@@ -431,7 +469,7 @@ export function App() {
 
       setSpec(result.spec);
       setRawInput(text);
-      setSelectedOperationKey("");
+      clearSelectedOperation();
       setServerUrl(detectDefaultServerUrl(result.spec));
       const workspaceId = activeWorkspace?.id ?? activeWorkspaceId;
       if (workspaceId) {
@@ -456,7 +494,7 @@ export function App() {
 
     setError("");
     setSpec(result.spec);
-    setSelectedOperationKey("");
+    clearSelectedOperation();
     setServerUrl(detectDefaultServerUrl(result.spec));
     const workspaceId = activeWorkspace?.id ?? activeWorkspaceId;
     if (workspaceId) {
@@ -481,7 +519,7 @@ export function App() {
 
     setError("");
     setSpec(result.spec);
-    setSelectedOperationKey("");
+    clearSelectedOperation();
     setServerUrl(detectDefaultServerUrl(result.spec));
     const workspaceId = activeWorkspace?.id ?? activeWorkspaceId;
     if (workspaceId) {
@@ -717,7 +755,7 @@ export function App() {
                           key={operation.key}
                           className={`operation-row ${selectedOperation && selectedOperation.key === operation.key ? "active" : ""}`}
                           type="button"
-                          onClick={() => setSelectedOperationKey(operation.key)}
+                          onClick={() => selectOperation(operation.key)}
                         >
                           <span className={methodTone(operation.method)}>{operation.method}</span>
                           <span className="op-path">{operation.path}</span>
@@ -805,130 +843,37 @@ export function App() {
           </article>
 
           {showTryOut ? (
-          <article className="detail-card">
-            <div className="tryout-head">
-              <h2>Try It Out</h2>
-              <label className="inline-switch">
-                <span>Local Proxy</span>
-                <input
-                  type="checkbox"
-                  checked={useProxy}
-                  onChange={(event) => setUseProxy(event.target.checked)}
-                />
-              </label>
-            </div>
-
-            <div className="stack">
-              <label>
-                <span>Server</span>
-                <input
-                  value={serverUrl}
-                  onChange={(event) => setServerUrl(event.target.value)}
-                  placeholder="https://api.example.com"
-                />
-              </label>
-              {useProxy ? (
-                <label>
-                  <span>Proxy URL</span>
-                  <input
-                    value={proxyUrl}
-                    onChange={(event) => setProxyUrl(event.target.value)}
-                    placeholder="http://localhost:8787/proxy"
-                  />
-                </label>
-              ) : null}
-            </div>
-
-            <details className="auth-section">
-              <summary>Authentication</summary>
-              <div className="auth-grid">
-                <label>
-                  <span>Type</span>
-                  <select value={authType} onChange={(event) => setAuthType(event.target.value as AuthType)}>
-                    <option value="none">None</option>
-                    <option value="bearer">Bearer Token</option>
-                    <option value="basic">Basic (base64)</option>
-                    <option value="api-key">API Key</option>
-                  </select>
-                </label>
-                {authType !== "none" ? (
-                  <>
-                    {authType === "api-key" ? (
-                      <label>
-                        <span>Header Name</span>
-                        <input
-                          value={authKeyName}
-                          onChange={(event) => setAuthKeyName(event.target.value)}
-                          placeholder="X-API-Key"
-                        />
-                      </label>
-                    ) : null}
-                    <label className={authType === "api-key" ? "" : "auth-value-full"}>
-                      <span>
-                        {authType === "bearer" ? "Token" : authType === "basic" ? "Credentials (base64)" : "API Key Value"}
-                      </span>
-                      <input
-                        type="password"
-                        value={authValue}
-                        onChange={(event) => setAuthValue(event.target.value)}
-                        placeholder={authType === "bearer" ? "eyJ…" : authType === "basic" ? "dXNlcjpwYXNz" : "••••••"}
-                      />
-                    </label>
-                  </>
-                ) : null}
-              </div>
-            </details>
-
-            <div className="tryout-grid">
-              <label>
-                <span>Path Params JSON</span>
-                <textarea value={pathParamsInput} onChange={(event) => setPathParamsInput(event.target.value)} rows={3} />
-              </label>
-              <label>
-                <span>Query Params JSON</span>
-                <textarea value={queryParamsInput} onChange={(event) => setQueryParamsInput(event.target.value)} rows={3} />
-              </label>
-              <label>
-                <span>Headers JSON</span>
-                <textarea value={headersInput} onChange={(event) => setHeadersInput(event.target.value)} rows={3} />
-              </label>
-              <label>
-                <span>Request Body</span>
-                <textarea value={requestBody} onChange={(event) => setRequestBody(event.target.value)} rows={4} />
-              </label>
-            </div>
-
-            <button type="button" onClick={sendRequest} disabled={!selectedOperation || isSending}>
-              {isSending ? "Sending..." : "Send Request"}
-            </button>
-
-            {requestError ? <p className="error">{requestError}</p> : null}
-
-            <div className="response-box">
-              <div className="response-meta">
-                {requestStatus ? (
-                  <span className={`status-badge ${statusTone(requestStatus)}`}>{requestStatus}</span>
-                ) : null}
-                <span className="response-time">{requestTiming !== null ? `${requestTiming} ms` : ""}</span>
-              </div>
-              {Object.keys(requestHeaders).length > 0 ? (
-                <details className="response-headers">
-                  <summary>Response Headers ({Object.keys(requestHeaders).length})</summary>
-                  <table>
-                    <tbody>
-                      {Object.entries(requestHeaders).map(([key, value]) => (
-                        <tr key={key}>
-                          <td>{key}</td>
-                          <td>{value}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </details>
-              ) : null}
-              <pre>{requestResponse || "No response yet."}</pre>
-            </div>
-          </article>
+            <TryOutPanel
+              selectedOperation={selectedOperation}
+              serverUrl={serverUrl}
+              onServerUrlChange={setServerUrl}
+              useProxy={useProxy}
+              onUseProxyChange={setUseProxy}
+              proxyUrl={proxyUrl}
+              onProxyUrlChange={setProxyUrl}
+              pathParamsInput={pathParamsInput}
+              onPathParamsChange={setPathParamsInput}
+              queryParamsInput={queryParamsInput}
+              onQueryParamsChange={setQueryParamsInput}
+              headersInput={headersInput}
+              onHeadersChange={setHeadersInput}
+              requestBody={requestBody}
+              onRequestBodyChange={setRequestBody}
+              authType={authType}
+              onAuthTypeChange={setAuthType}
+              authValue={authValue}
+              onAuthValueChange={setAuthValue}
+              authKeyName={authKeyName}
+              onAuthKeyNameChange={setAuthKeyName}
+              activeEnv={activeEnv}
+              isSending={isSending}
+              onSend={() => void sendRequest()}
+              requestError={requestError}
+              requestStatus={requestStatus}
+              requestTiming={requestTiming}
+              requestHeaders={requestHeaders}
+              requestResponse={requestResponse}
+            />
           ) : null}
         </section>
           </div>

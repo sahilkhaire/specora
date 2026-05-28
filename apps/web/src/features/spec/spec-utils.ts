@@ -193,6 +193,51 @@ export function operationKey(operation: Pick<OperationItem, "method" | "path" | 
   return `${operation.method}:${operation.path}:${operation.operationId}`;
 }
 
+/** Query param used in the browser URL for deep-linking to an operation. */
+export const OPERATION_URL_PARAM = "op";
+
+export function getOperationKeyFromLocation(
+  location: Pick<Location, "search"> = typeof window !== "undefined" ? window.location : { search: "" }
+): string | null {
+  const value = new URLSearchParams(location.search).get(OPERATION_URL_PARAM)?.trim();
+  return value || null;
+}
+
+export function setOperationKeyInLocation(
+  key: string,
+  options?: { replace?: boolean; location?: Location }
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const base = options?.location ?? window.location;
+  const url = new URL(base.href);
+  url.searchParams.set(OPERATION_URL_PARAM, key);
+  window.history[options?.replace ? "replaceState" : "pushState"](window.history.state, "", url);
+}
+
+export function clearOperationKeyFromLocation(options?: { replace?: boolean }): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(OPERATION_URL_PARAM)) {
+    return;
+  }
+
+  url.searchParams.delete(OPERATION_URL_PARAM);
+  window.history[options?.replace ? "replaceState" : "pushState"](window.history.state, "", url);
+}
+
+export function findOperationByKey(
+  operations: OperationItem[],
+  key: string
+): OperationItem | undefined {
+  return operations.find((operation) => operation.key === key);
+}
+
 export interface TagGroup {
   tag: string;
   operations: OperationItem[];

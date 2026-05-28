@@ -79,6 +79,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: /Create order/i }));
     expect(screen.getByText(/Operation ID:/)).toBeInTheDocument();
     expect(screen.getByText(/Request Body:/)).toBeInTheDocument();
+    expect(window.location.search).toContain("op=POST%3A%2Forders%3AcreateOrder");
   });
 
   it("supports workspace lifecycle create rename switch and delete", async () => {
@@ -137,7 +138,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Parse Pasted Spec" }));
 
     fireEvent.click(await screen.findByRole("button", { name: /List pets/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Send Request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(await screen.findByText(
       "Network request failed (often CORS or connectivity). Next step: check API reachability or enable proxy mode."

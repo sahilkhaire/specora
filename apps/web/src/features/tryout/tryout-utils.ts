@@ -133,6 +133,40 @@ export function applyVariables(
   );
 }
 
+export function buildCurlCommand(options: {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body?: string;
+}): string {
+  const escape = (value: string) => value.replace(/'/g, "'\\''");
+  const lines = [`curl -X ${options.method} '${escape(options.url)}'`];
+  Object.entries(options.headers).forEach(([key, value]) => {
+    lines.push(`  -H '${escape(key)}: ${escape(value)}'`);
+  });
+  if (options.body?.trim()) {
+    lines.push(`  -d '${escape(options.body)}'`);
+  }
+  return lines.join(" \\\n");
+}
+
+export function methodBadgeClass(method: string): string {
+  if (method === "GET") return "method-badge method-get";
+  if (method === "POST") return "method-badge method-post";
+  if (method === "PUT" || method === "PATCH") return "method-badge method-put";
+  if (method === "DELETE") return "method-badge method-delete";
+  return "method-badge method-default";
+}
+
+export function statusBadgeClass(status: string): string {
+  const code = Number(status);
+  if (code >= 200 && code < 300) return "status-badge status-2xx";
+  if (code >= 300 && code < 400) return "status-badge status-3xx";
+  if (code >= 400 && code < 500) return "status-badge status-4xx";
+  if (code >= 500) return "status-badge status-5xx";
+  return "status-badge";
+}
+
 export function mapTryoutSendError(error: unknown, useProxy: boolean): string {
   const rawMessage = error instanceof Error ? error.message : String(error ?? "Failed to send request");
   const normalized = rawMessage.toLowerCase();

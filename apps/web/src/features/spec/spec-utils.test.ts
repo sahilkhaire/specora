@@ -1,11 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   extractOperations,
   filterOperations,
+  findOperationByKey,
+  getOperationKeyFromLocation,
+  OPERATION_URL_PARAM,
   parseSpecText,
   groupOperationsByTags,
   getUsedSchemasForOperation,
-  getUsedSchemaDetailsForOperation
+  getUsedSchemaDetailsForOperation,
+  setOperationKeyInLocation
 } from "./spec-utils";
 
 const fixture = `
@@ -31,6 +35,10 @@ paths:
 `;
 
 describe("spec-utils", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("parses valid YAML specs", () => {
     const result = parseSpecText(fixture);
     expect(result.ok).toBe(true);
@@ -78,6 +86,32 @@ describe("spec-utils", () => {
     if (!result.ok) {
       expect(result.error).toContain("JSON parse error");
     }
+  });
+
+  it("reads operation keys from the URL query string", () => {
+    expect(getOperationKeyFromLocation({ search: `?${OPERATION_URL_PARAM}=POST%3A%2Forders%3AcreateOrder` }))
+      .toBe("POST:/orders:createOrder");
+    expect(getOperationKeyFromLocation({ search: "" })).toBeNull();
+  });
+
+  it("writes operation keys through the history API", () => {
+    const replaceState = vi.spyOn(window.history, "replaceState").mockImplementation(() => undefined);
+
+    setOperationKeyInLocation("GET:/pets:", { replace: true });
+
+    const urlArg = replaceState.mock.calls[0]?.[2];
+    expect(String(urlArg)).toContain(`${OPERATION_URL_PARAM}=GET%3A%2Fpets%3A`);
+  });
+
+  it("finds operations by stable key", () => {
+    const parsed = parseSpecText(fixture);
+    if (!parsed.ok) {
+      throw new Error(parsed.error);
+    }
+
+    const operations = extractOperations(parsed.spec);
+    const match = findOperationByKey(operations, "GET:/pets:");
+    expect(match?.summary).toBe("List pets");
   });
 
   it("extracts operations and supports filtering", () => {
