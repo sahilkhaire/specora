@@ -45,7 +45,7 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Parse Pasted Spec" }));
 
-    expect(await screen.findByText("UI Test API")).toBeInTheDocument();
+    expect((await screen.findAllByText("UI Test API")).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("button", { name: /List pets/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Create order/i })).toBeInTheDocument();
   });

@@ -20,6 +20,8 @@ import type { AuthConfig, AuthType } from "@/features/tryout/tryout-utils";
 import { useEnvironments } from "@/features/environments/use-environments";
 import { EnvPanel } from "@/features/environments/EnvPanel";
 import { SettingsView } from "@/features/settings/SettingsView";
+import { WorkflowsView } from "@/features/workflows/WorkflowsView";
+import { useWorkflows } from "@/features/workflows/use-workflows";
 import { WorkspaceSelector } from "@/features/workspaces/WorkspaceSelector";
 import { useWorkspaces } from "@/features/workspaces/use-workspaces";
 
@@ -124,6 +126,7 @@ export function App() {
   const [isEnvPanelOpen, setIsEnvPanelOpen] = useState(false);
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
   const [activeSection, setActiveSection] = useState<ActiveSection>("endpoints");
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -190,6 +193,8 @@ export function App() {
     deleteEnvironment,
     switchEnvironment,
   } = useEnvironments();
+
+  const workflowsApi = useWorkflows(activeWorkspaceId ?? "");
 
   useEffect(() => {
     if (workspaces.length === 0) {
@@ -271,6 +276,13 @@ export function App() {
     });
   }
   const info = (spec?.info as Record<string, unknown> | undefined) ?? {};
+  const apiTitle = String(info.title ?? "No API loaded");
+  const apiVersion = String(info.version ?? "—");
+  const workflowAuth: AuthConfig = {
+    type: authType,
+    value: authValue,
+    keyName: authKeyName,
+  };
 
   // Auto-fill server URL and auth when the active environment switches.
   useEffect(() => {
@@ -510,8 +522,8 @@ export function App() {
       <div className="dashboard-layout">
         <aside className="side-nav">
           <div className="api-card">
-            <p className="api-title">Core API</p>
-            <p className="api-version">v1.2.4-beta</p>
+            <p className="api-title">{apiTitle}</p>
+            <p className="api-version">v{apiVersion}</p>
           </div>
 
           <nav className="side-links" aria-label="Sections">
@@ -530,6 +542,34 @@ export function App() {
               Workflows
             </button>
           </nav>
+
+          <div className="side-nav-footer">
+            <button
+              type="button"
+              className="side-footer-btn"
+              onClick={() => {
+                setShowSpecLoader(true);
+                setLoadMode("url");
+                setTimeout(() => urlInputRef.current?.focus(), 50);
+              }}
+            >
+              Import Spec
+            </button>
+            <button
+              type="button"
+              className="side-footer-btn"
+              onClick={() => setIsEnvPanelOpen(true)}
+            >
+              Environment
+            </button>
+            <button
+              type="button"
+              className="side-footer-btn"
+              onClick={() => setShowSettings(true)}
+            >
+              Settings
+            </button>
+          </div>
         </aside>
 
         {activeSection === "endpoints" && (
@@ -783,48 +823,58 @@ export function App() {
         )}
 
         {activeSection === "workflows" && (
-          <div className="content-pane">
-            <article className="detail-card">
-              <div className="tryout-head">
-                <h2>Workflows</h2>
-              </div>
-              <div className="workflow-actions">
-                <button
-                  type="button"
-                  className="import-btn"
-                  onClick={() => {
-                    setShowSpecLoader(true);
-                    setLoadMode("url");
-                    setTimeout(() => urlInputRef.current?.focus(), 50);
-                  }}
-                >
-                  Import Spec
-                </button>
-                <button
-                  type="button"
-                  className="env-switcher-btn"
-                  onClick={() => setIsEnvPanelOpen(true)}
-                >
-                  <span className={`env-dot ${activeEnvId ? "env-dot-on" : ""}`} />
-                  {activeEnv ? activeEnv.name : "No Environment"}
-                </button>
-              </div>
-            </article>
-            <SettingsView 
-              spec={spec} 
-              useProxy={useProxy} 
-              proxyUrl={proxyUrl} 
-              themeMode={themeMode}
-              resolvedTheme={resolvedTheme}
-              onThemeModeChange={setThemeMode}
-              onProxyChange={(use, url) => {
-                setUseProxy(use);
-                setProxyUrl(url);
-              }} 
-            />
-          </div>
+          <WorkflowsView
+            specLoaded={Boolean(spec)}
+            operations={operations}
+            serverUrl={serverUrl}
+            useProxy={useProxy}
+            proxyUrl={proxyUrl}
+            activeEnv={activeEnv}
+            auth={workflowAuth}
+            workflowsApi={workflowsApi}
+            onImportSpec={() => {
+              setShowSpecLoader(true);
+              setLoadMode("url");
+              setTimeout(() => urlInputRef.current?.focus(), 50);
+            }}
+          />
         )}
       </div>
+
+      {showSettings && (
+        <div className="spec-loader-overlay" onClick={() => setShowSettings(false)}>
+          <div
+            className="spec-loader-panel settings-panel"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="spec-loader-header">
+              <h2>Settings</h2>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowSettings(false)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="spec-loader-content">
+              <SettingsView
+                spec={spec}
+                useProxy={useProxy}
+                proxyUrl={proxyUrl}
+                themeMode={themeMode}
+                resolvedTheme={resolvedTheme}
+                onThemeModeChange={setThemeMode}
+                onProxyChange={(use, url) => {
+                  setUseProxy(use);
+                  setProxyUrl(url);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {showSpecLoader && (
         <div className="spec-loader-overlay">
