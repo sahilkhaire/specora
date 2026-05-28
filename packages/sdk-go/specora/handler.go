@@ -3,6 +3,7 @@ package specora
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"sync"
 )
 
@@ -45,6 +46,15 @@ func Handler(cfg Config) http.Handler {
 	}
 
 	mux.HandleFunc(mount+"/openapi.json", serveSpec)
+
+	if assetsDir := cfg.localAssetsDir(); assetsDir != "" {
+		if info, err := os.Stat(assetsDir); err == nil && info.IsDir() {
+			mux.Handle(
+				mount+"/_assets/",
+				http.StripPrefix(mount+"/_assets/", http.FileServer(http.Dir(assetsDir))),
+			)
+		}
+	}
 
 	mux.HandleFunc(mount+"/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != mount+"/" && r.URL.Path != mount {

@@ -8,23 +8,29 @@
 //
 //	go run ./example/main.go
 //	go run ./example/main.go https://petstore.swagger.io/v2/swagger.json
+//	PORT=8081 go run ./example/main.go
 //
-// Open http://localhost:8080/api-docs/
+// Open http://localhost:8080/api-docs/ (or the PORT you set).
 package main
 
 import (
+	"errors"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"syscall"
 
 	"github.com/sahilkhaire/specora/packages/sdk-go/specora"
 )
 
 func main() {
 	specPath := filepath.Join("..", "..", "..", "packages", "cli", "tests", "fixtures", "valid-openapi.yaml")
-	if len(os.Args) > 1 {
-		specPath = os.Args[1]
+	args := os.Args[1:]
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		specPath = args[0]
 	}
 
 	embedDir := specora.ResolveEmbedDir(
@@ -49,7 +55,35 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/api-docs/", specora.Handler(cfg))
 
-	addr := ":8080"
-	log.Printf("Specora Go example listening on http://localhost%s/api-docs/", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	addr := ":" + port
+	log.Printf("Specora Go example listening on http://localhost:%s/api-docs/", port)
+
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		if isAddrInUse(err) {
+			log.Fatalf(
+				"port %s is already in use (often a previous example still running). "+
+					"Stop it with: lsof -ti :%s | xargs kill\nOr use another port: PORT=8081 go run ./example/main.go",
+				port,
+				port,
+			)
+		}
+		log.Fatal(err)
+	}
+	log.Fatal(http.Serve(ln, mux))
+}
+
+func isAddrInUse(err error) bool {
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		var sysErr syscall.Errno
+		if errors.As(opErr.Err, &sysErr) {
+			return sysErr == syscall.EADDRINUSE
+		}
+	}
+	return false
 }

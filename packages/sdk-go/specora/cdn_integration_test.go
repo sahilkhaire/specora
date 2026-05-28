@@ -39,6 +39,9 @@ func TestProductionCDN(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
+	if !contains(body, "specora.varcore.dev/embed/latest/assets/") {
+		t.Fatalf("expected CDN asset URLs in HTML, got: %s", body[:min(400, len(body))])
+	}
 	if !contains(body, "__SPECORA_EMBED__") {
 		snippet := body
 		if len(snippet) > 300 {

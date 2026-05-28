@@ -62,8 +62,9 @@ func injectEmbedConfig(indexHTML string, c Config, mount string) (string, error)
 	}
 
 	injection := fmt.Sprintf("<script>window.__SPECORA_EMBED__=%s;</script>", cfgJSON)
-	if strings.Contains(indexHTML, "</head>") {
-		return strings.Replace(indexHTML, "</head>", injection+"</head>", 1), nil
+	html := rewriteEmbedAssetURLs(indexHTML, mount, c)
+	if strings.Contains(html, "</head>") {
+		return strings.Replace(html, "</head>", injection+"</head>", 1), nil
 	}
-	return injection + indexHTML, nil
+	return injection + html, nil
 }

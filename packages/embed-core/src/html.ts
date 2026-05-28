@@ -1,5 +1,20 @@
 import type { EmbedCoreOptions } from "./types.js";
 
+const DEFAULT_CDN = "https://specora.varcore.dev/embed";
+
+function cdnVersionedBase(options: EmbedCoreOptions): string {
+  const base = (options.cdnBase ?? process.env.SPECORA_EMBED_CDN ?? DEFAULT_CDN).replace(/\/$/, "");
+  const version = options.version ?? process.env.SPECORA_EMBED_VERSION ?? "latest";
+  return version === "latest" ? `${base}/latest` : `${base}/v${version}`;
+}
+
+function rewriteEmbedAssetURLs(indexHtml: string, options: EmbedCoreOptions & { mountPath: string }): string {
+  const prefix = `${cdnVersionedBase(options)}/`;
+  return indexHtml
+    .replaceAll('src="/assets/', `src="${prefix}assets/`)
+    .replaceAll('href="/assets/', `href="${prefix}assets/`);
+}
+
 export function buildBootstrapHtml(
   indexHtml: string,
   options: EmbedCoreOptions & { specUrl: string; mountPath: string }
@@ -13,10 +28,11 @@ export function buildBootstrapHtml(
   };
 
   const injection = `<script>window.__SPECORA_EMBED__=${JSON.stringify(config)};</script>`;
+  const html = rewriteEmbedAssetURLs(indexHtml, options);
 
-  if (indexHtml.includes("</head>")) {
-    return indexHtml.replace("</head>", `${injection}</head>`);
+  if (html.includes("</head>")) {
+    return html.replace("</head>", `${injection}</head>`);
   }
 
-  return `${injection}${indexHtml}`;
+  return `${injection}${html}`;
 }
