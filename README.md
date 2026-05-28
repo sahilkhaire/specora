@@ -6,6 +6,36 @@ Specora is a modern open-source OpenAPI documentation platform with:
 - CLI to replace script-based validate/serve/export workflows
 - Shared core parsing and normalization engine
 
+## UI Preview
+
+Screenshots use the official [Swagger Petstore](https://petstore.swagger.io/) spec (`https://petstore.swagger.io/v2/swagger.json`). A copy of that spec lives in [`docs/fixtures/petstore.swagger.json`](docs/fixtures/petstore.swagger.json) for demos and docs.
+
+### API client workbench
+
+Browse endpoints by tag, send requests, and inspect responses — collections, try-out, and schema reference in one view.
+
+![Specora API client with Swagger Petstore](docs/images/ui-overview.png)
+
+### Try it out
+
+Configure path/query params, headers, body, and auth, then send requests against your base URL.
+
+![Try it out panel](docs/images/ui-tryout.png)
+
+### Schema reference
+
+Operation insight panel shows parameters, payload templates, and response structure from the OpenAPI definition.
+
+![Schema and response reference](docs/images/ui-schemas.png)
+
+To regenerate these screenshots locally (requires the web dev server on port 5173):
+
+```bash
+npm run dev:web
+# in another terminal:
+npm run screenshots:readme
+```
+
 ## Quick Start
 
 1. Install dependencies:

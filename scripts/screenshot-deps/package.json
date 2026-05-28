@@ -1,0 +1,8 @@
+{
+  "name": "specora-screenshot-deps",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "playwright": "1.49.1"
+  }
+}

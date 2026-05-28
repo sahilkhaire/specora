@@ -18,7 +18,8 @@
     "publish:embed-cdn": "node scripts/publish-embed-cdn.mjs",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "smoke:proxy-contract": "npm exec -w @specora/cli tsx ../../scripts/smoke-proxy-contract.mjs",
-    "bench:web-large-spec": "npm exec -w @specora/cli tsx ../../scripts/benchmark-large-spec-render.mjs"
+    "bench:web-large-spec": "npm exec -w @specora/cli tsx ../../scripts/benchmark-large-spec-render.mjs",
+    "screenshots:readme": "node scripts/screenshot-deps/capture.mjs"
   },
   "engines": {
     "node": ">=20.0.0"
