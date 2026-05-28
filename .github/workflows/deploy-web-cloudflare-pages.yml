@@ -43,6 +43,12 @@ jobs:
       - name: Build web app
         run: npm run -w @specora/web build
 
+      - name: Build embed bundle for /embed CDN path
+        run: npm run publish:embed-cdn
+
+      - name: Copy embed into Pages output
+        run: cp -r dist/embed apps/web/dist/embed
+
       - name: Deploy to Cloudflare Pages (production)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: cloudflare/wrangler-action@v3
