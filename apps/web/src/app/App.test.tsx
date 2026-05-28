@@ -114,4 +114,24 @@ describe("App", () => {
 
     expect(screen.queryByText("Billing Workspace", { selector: ".workspace-item-name" })).not.toBeInTheDocument();
   });
+
+  it("shows actionable try-out message for direct network failures", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Import Spec" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Paste" }));
+    fireEvent.change(screen.getByPlaceholderText("Paste OpenAPI JSON or YAML here"), {
+      target: { value: fixture }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Parse Pasted Spec" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: /List pets/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Send Request" }));
+
+    expect(await screen.findByText(
+      "Network request failed (often CORS or connectivity). Next step: check API reachability or enable proxy mode."
+    )).toBeInTheDocument();
+  });
 });

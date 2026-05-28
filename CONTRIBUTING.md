@@ -2,15 +2,45 @@
 
 ## Development Setup
 1. Install Node.js 20 or newer.
-2. Install dependencies:
+2. Clone the repository and open the root directory.
+3. Install dependencies:
 
+```bash
 npm install
+```
 
-3. Validate local quality checks:
+4. Run local quality checks:
 
+```bash
 npm run lint
 npm run build
 npm run test
+```
+
+5. Optional reliability smoke checks for web try-out proxy contract:
+
+```bash
+npm run smoke:proxy-contract
+```
+
+## Clean-Machine Validation (N1-2)
+Use this checklist when validating onboarding from a fresh environment:
+
+1. Confirm prerequisites:
+   - Node.js >= 20 (`node -v`)
+   - npm available (`npm -v`)
+2. Run install and baseline checks from repository root:
+   - `npm install`
+   - `npm run lint`
+   - `npm run build`
+   - `npm run test`
+3. Verify the two primary local entrypoints:
+   - Web: `npm run dev:web`
+   - CLI: `npm run dev:cli`
+4. Verify try-out proxy flow:
+   - Start proxy with `npx specora proxy --port 8787` (or `npm run -w @specora/cli dev -- proxy --port 8787`)
+   - In web try-out, enable local proxy mode and keep `http://localhost:8787/proxy`
+5. Record any missing steps and update docs in the same PR.
 
 ## Project Structure
 - apps/web: React + Vite user interface

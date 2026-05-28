@@ -23,6 +23,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build core types for workspace resolution
+        run: npm run -w @specora/core build
+
       - name: Lint
         run: npm run lint
 

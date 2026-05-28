@@ -106,6 +106,28 @@ npm run build
 npm run test
 ```
 
+Run web-proxy contract smoke checks:
+
+```bash
+npm run smoke:proxy-contract
+```
+
+## Cloudflare Pages Deployment
+
+This repository includes a GitHub Actions pipeline at `.github/workflows/deploy-web-cloudflare-pages.yml` to publish `apps/web` to Cloudflare Pages.
+
+- Push to `main` deploys production.
+- Pull requests deploy preview builds.
+- You can also trigger it manually via `workflow_dispatch`.
+
+### Required GitHub Secrets
+
+Configure these repository secrets before running the deploy workflow:
+
+- `CLOUDFLARE_API_TOKEN` (Cloudflare API token with Pages edit permissions)
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_PAGES_PROJECT_NAME` (existing Pages project name)
+
 ## Planning Documents
 
 The `plan` folder contains the 6-8 week delivery plan, backlog, architecture, testing strategy, and release governance docs used to guide implementation.

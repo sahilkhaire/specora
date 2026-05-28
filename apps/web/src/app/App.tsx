@@ -8,7 +8,14 @@ import {
   parseSpecText,
   operationKey
 } from "@/features/spec/spec-utils";
-import { applyVariables, buildRequestUrl, buildAuthHeaders, safeParseRecord, scaffoldFromParameters } from "@/features/tryout/tryout-utils";
+import {
+  applyVariables,
+  buildRequestUrl,
+  buildAuthHeaders,
+  mapTryoutSendError,
+  safeParseRecord,
+  scaffoldFromParameters
+} from "@/features/tryout/tryout-utils";
 import type { AuthConfig, AuthType } from "@/features/tryout/tryout-utils";
 import { useEnvironments } from "@/features/environments/use-environments";
 import { EnvPanel } from "@/features/environments/EnvPanel";
@@ -537,7 +544,7 @@ export function App() {
 
       setRequestTiming(Math.round(performance.now() - start));
     } catch (sendError) {
-      setRequestError(sendError instanceof Error ? sendError.message : "Failed to send request");
+      setRequestError(mapTryoutSendError(sendError, useProxy));
       setRequestTiming(Math.round(performance.now() - start));
     } finally {
       setIsSending(false);

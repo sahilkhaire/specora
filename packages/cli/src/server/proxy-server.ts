@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import type { Server } from "node:http";
 
 function applyCorsHeaders(res: ServerResponse): void {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -20,7 +21,23 @@ async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknow
   return JSON.parse(raw) as Record<string, unknown>;
 }
 
-export function startProxyServer(port: number): void {
+const DEFAULT_UPSTREAM_TIMEOUT_MS = 10_000;
+
+function getUpstreamTimeoutMs(): number {
+  const raw = process.env.SPECORA_PROXY_TIMEOUT_MS;
+  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_UPSTREAM_TIMEOUT_MS;
+}
+
+function tryParseUrl(rawUrl: string): URL | null {
+  try {
+    return new URL(rawUrl);
+  } catch {
+    return null;
+  }
+}
+
+export function startProxyServer(port: number): Server {
   const proxyServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     applyCorsHeaders(res);
 
@@ -53,11 +70,32 @@ export function startProxyServer(port: number): void {
         return;
       }
 
-      const response = await fetch(url, {
-        method,
-        headers,
-        body: ["GET", "HEAD"].includes(method) ? undefined : body
-      });
+      if (!tryParseUrl(url)) {
+        res.statusCode = 400;
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.end(JSON.stringify({ ok: false, error: "Invalid target URL." }));
+        return;
+      }
+
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method,
+          headers,
+          body: ["GET", "HEAD"].includes(method) ? undefined : body,
+          signal: AbortSignal.timeout(getUpstreamTimeoutMs())
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        const isTimeout = message.toLowerCase().includes("timeout");
+        res.statusCode = isTimeout ? 504 : 502;
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.end(JSON.stringify({
+          ok: false,
+          error: isTimeout ? "Target request timed out." : "Target request failed."
+        }));
+        return;
+      }
 
       const responseText = await response.text();
       const responseHeaders: Record<string, string> = {};
@@ -75,14 +113,15 @@ export function startProxyServer(port: number): void {
         error: response.ok ? undefined : `Target returned HTTP ${response.status}`
       }));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Proxy request failed";
       res.statusCode = 500;
       res.setHeader("Content-Type", "application/json; charset=utf-8");
-      res.end(JSON.stringify({ ok: false, error: message }));
+      res.end(JSON.stringify({ ok: false, error: "Proxy request failed." }));
     }
   });
 
   proxyServer.listen(port, () => {
     console.log(`Specora proxy listening at http://localhost:${port}/proxy`);
   });
+
+  return proxyServer;
 }

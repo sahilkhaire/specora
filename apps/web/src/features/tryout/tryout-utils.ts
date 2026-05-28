@@ -132,3 +132,43 @@ export function applyVariables(
     Object.prototype.hasOwnProperty.call(variables, key) ? variables[key] : match
   );
 }
+
+export function mapTryoutSendError(error: unknown, useProxy: boolean): string {
+  const rawMessage = error instanceof Error ? error.message : String(error ?? "Failed to send request");
+  const normalized = rawMessage.toLowerCase();
+
+  if (normalized.includes("abort") || normalized.includes("timeout")) {
+    return "Request timed out. Next step: retry, verify the server URL, and check API/proxy responsiveness.";
+  }
+
+  if (
+    normalized.includes("401")
+    || normalized.includes("403")
+    || normalized.includes("unauthorized")
+    || normalized.includes("forbidden")
+  ) {
+    return "Authentication failed (401/403). Next step: update auth credentials or token, then retry.";
+  }
+
+  if (normalized.includes("cors")) {
+    return "CORS blocked the request. Next step: enable CORS on the API or use the local proxy mode.";
+  }
+
+  if (
+    normalized.includes("failed to fetch")
+    || normalized.includes("networkerror")
+    || normalized.includes("network error")
+    || normalized.includes("load failed")
+  ) {
+    if (useProxy) {
+      return "Could not reach the local proxy. Next step: start `specora proxy` and confirm the proxy URL.";
+    }
+    return "Network request failed (often CORS or connectivity). Next step: check API reachability or enable proxy mode.";
+  }
+
+  if (useProxy && normalized.includes("proxy")) {
+    return "Proxy request failed. Next step: verify proxy is running and the target endpoint is reachable.";
+  }
+
+  return `Request failed: ${rawMessage}`;
+}

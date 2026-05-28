@@ -13,7 +13,8 @@
     "dev:cli": "npm run -w @specora/cli dev",
     "lint": "npm run -w @specora/core lint && npm run -w @specora/cli lint && npm run -w @specora/web lint",
     "test": "npm run -w @specora/core test && npm run -w @specora/cli test && npm run -w @specora/web test",
-    "check:boundaries": "node scripts/check-boundaries.mjs"
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "smoke:proxy-contract": "npm exec -w @specora/cli tsx ../../scripts/smoke-proxy-contract.mjs"
   },
   "engines": {
     "node": ">=20.0.0"
