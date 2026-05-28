@@ -20,3 +20,8 @@
 1. E4.1 CI and quality gates
 2. E4.2 Release checklist and docs
 3. E4.3 Contributor workflow and governance maintenance
+
+## Post-v0.1.0 Execution Mapping
+1. M7-M9 iteration execution board: `plan/30-execution/iteration-4-week-delivery-board.md`
+2. Backlog source: `plan/30-execution/backlog-mvp.md` (Next Iteration Backlog section)
+3. Milestone source: `plan/20-delivery/milestones-and-kpis.md` (Post-v0.1.0 Next Plan section)

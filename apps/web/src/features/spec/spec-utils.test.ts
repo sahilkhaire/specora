@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractOperations, filterOperations, parseSpecText, groupOperationsByTags } from "./spec-utils";
+import { extractOperations, filterOperations, parseSpecText, groupOperationsByTags, getUsedSchemasForOperation } from "./spec-utils";
 
 const fixture = `
 openapi: 3.0.3
@@ -144,5 +144,58 @@ paths:
     expect(apiGroup?.operations).toHaveLength(1);
     expect(untaggedGroup).toBeDefined();
     expect(untaggedGroup?.operations).toHaveLength(1);
+  });
+
+  it("returns used schemas for an operation including nested references", () => {
+    const specText = `
+openapi: 3.0.3
+info:
+  title: Used Schemas API
+  version: 1.0.0
+paths:
+  /orders:
+    post:
+      summary: Create order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+components:
+  schemas:
+    CreateOrderRequest:
+      type: object
+      properties:
+        customer:
+          $ref: '#/components/schemas/Customer'
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        customer:
+          $ref: '#/components/schemas/Customer'
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+`;
+
+    const parsed = parseSpecText(specText);
+    if (!parsed.ok) {
+      throw new Error(parsed.error);
+    }
+
+    const used = getUsedSchemasForOperation(parsed.spec, { path: "/orders", method: "POST" });
+    expect(used).toEqual(["CreateOrderRequest", "Customer", "Order"]);
   });
 });

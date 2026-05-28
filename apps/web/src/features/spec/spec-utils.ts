@@ -232,3 +232,106 @@ export function detectDefaultServerUrl(spec: Record<string, unknown>): string {
 
   return "";
 }
+
+function collectRefsDeep(node: unknown, refs: Set<string>): void {
+  if (!node || typeof node !== "object") {
+    return;
+  }
+
+  if (Array.isArray(node)) {
+    node.forEach((item) => collectRefsDeep(item, refs));
+    return;
+  }
+
+  const record = node as Record<string, unknown>;
+  const maybeRef = record.$ref;
+  if (typeof maybeRef === "string" && maybeRef.trim()) {
+    refs.add(maybeRef.trim());
+  }
+
+  Object.values(record).forEach((value) => collectRefsDeep(value, refs));
+}
+
+function resolveLocalRef(spec: Record<string, unknown>, ref: string): unknown {
+  if (!ref.startsWith("#/")) {
+    return null;
+  }
+
+  const segments = ref
+    .slice(2)
+    .split("/")
+    .map((segment) => decodeURIComponent(segment).replace(/~1/g, "/").replace(/~0/g, "~"));
+
+  let current: unknown = spec;
+  for (const segment of segments) {
+    if (!current || typeof current !== "object") {
+      return null;
+    }
+
+    current = (current as Record<string, unknown>)[segment];
+  }
+
+  return current;
+}
+
+export function getUsedSchemasForOperation(
+  spec: Record<string, unknown>,
+  operation: Pick<OperationItem, "path" | "method">
+): string[] {
+  const paths = (spec.paths as Record<string, unknown> | undefined) ?? {};
+  const pathItem = paths[operation.path] as Record<string, unknown> | undefined;
+  if (!pathItem || typeof pathItem !== "object") {
+    return [];
+  }
+
+  const methodKey = operation.method.toLowerCase();
+  const opItem = pathItem[methodKey] as Record<string, unknown> | undefined;
+  if (!opItem || typeof opItem !== "object") {
+    return [];
+  }
+
+  const initialNodes: unknown[] = [opItem];
+  if (Array.isArray(pathItem.parameters)) {
+    initialNodes.push(pathItem.parameters);
+  }
+
+  const allRefs = new Set<string>();
+  initialNodes.forEach((node) => collectRefsDeep(node, allRefs));
+
+  // Follow local refs to include transitive schema usage.
+  const queue = Array.from(allRefs);
+  const visited = new Set<string>();
+  while (queue.length > 0) {
+    const ref = queue.shift() as string;
+    if (visited.has(ref)) {
+      continue;
+    }
+    visited.add(ref);
+
+    const resolved = resolveLocalRef(spec, ref);
+    if (!resolved) {
+      continue;
+    }
+
+    const nestedRefs = new Set<string>();
+    collectRefsDeep(resolved, nestedRefs);
+    nestedRefs.forEach((nestedRef) => {
+      if (!allRefs.has(nestedRef)) {
+        allRefs.add(nestedRef);
+        queue.push(nestedRef);
+      }
+    });
+  }
+
+  const schemas = new Set<string>();
+  allRefs.forEach((ref) => {
+    const match = ref.match(/^#\/components\/schemas\/([^/]+)$/);
+    if (!match || !match[1]) {
+      return;
+    }
+
+    schemas.add(decodeURIComponent(match[1]).replace(/~1/g, "/").replace(/~0/g, "~"));
+  });
+
+  return Array.from(schemas).sort((a, b) => a.localeCompare(b));
+}

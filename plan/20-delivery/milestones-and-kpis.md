@@ -20,6 +20,20 @@
 6. M6 Release Candidate and Launch (week 7-8)
 - KPI: v0.1.0 tagged with all quality gates passing.
 
+## Post-v0.1.0 Next Plan (4 Weeks)
+
+1. M7 Workspace Stability and Safety (week 1)
+- KPI: workspace lifecycle flows (create/switch/delete/rename) pass tests with no high-severity open defects.
+
+2. M8 Try-Out + Proxy Reliability (week 2-3)
+- KPI: proxy integration tests and web try-out error-path coverage green for timeout/CORS/network failure cases.
+
+3. M9 Performance + v0.1.1 Patch Readiness (week 4)
+- KPI: large-spec render p95 improves against v0.1.0 baseline and patch checklist reaches signoff-ready state.
+
+Reference Plan:
+- See `plan/20-delivery/next-iteration-plan-4-weeks.md` for objectives, scope guardrails, and risk alignment.
+
 ## Product KPIs
 
 1. Quality

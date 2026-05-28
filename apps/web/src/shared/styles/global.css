@@ -1,30 +1,64 @@
 @import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap");
 
 :root {
+  color-scheme: light;
   --background: #ffffff;
   --surface: #fafafa;
   --surface-low: #f4f4f5;
   --border: #e2e2e2;
   --border-strong: #000000;
+  --outline: #d4d4d8;
   --text: #000000;
   --text-muted: #666666;
   --text-subtle: #999999;
   --primary: #000000;
+  --primary-hover: #1a1a1a;
   --primary-fg: #ffffff;
   --error: #000000;
   --error-bg: #f4f4f5;
+  --code-bg: #0f0f10;
+  --code-fg: #ffffff;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0f1115;
+  --surface: #151923;
+  --surface-low: #1c2230;
+  --border: #2a3142;
+  --border-strong: #cad4ef;
+  --outline: #2f384b;
+  --text: #f4f7ff;
+  --text-muted: #b8c0d6;
+  --text-subtle: #8f9bb5;
+  --primary: #e8eefc;
+  --primary-hover: #d8e1f6;
+  --primary-fg: #0f1115;
+  --error: #ffd5d5;
+  --error-bg: #2a171b;
+  --code-bg: #080b12;
+  --code-fg: #eef3ff;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
+  height: 100%;
   margin: 0;
   font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--text);
   background: var(--background);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 input,
@@ -73,7 +107,8 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: #1a1a1a;
+  background: var(--primary-hover);
+  color: var(--primary-fg);
 }
 
 button:active:not(:disabled) {
@@ -86,8 +121,11 @@ button:disabled {
 }
 
 .app-shell {
-  min-height: 100vh;
-  padding-bottom: 5rem;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .top-nav {
@@ -143,9 +181,31 @@ button:disabled {
   border-bottom: 2px solid var(--border-strong);
 }
 
+.top-link:hover:not(.active) {
+  background: var(--surface-low);
+  color: var(--text);
+}
+
 .top-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+.theme-toggle-btn {
+  background: var(--surface-low);
+  color: var(--text);
+  border: 1px solid var(--border);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+}
+
+.theme-toggle-btn:hover:not(:disabled) {
+  background: var(--surface);
+  border-color: var(--border-strong);
 }
 
 .import-btn {
@@ -209,12 +269,13 @@ button:disabled {
 
 .dashboard-layout {
   display: grid;
-  grid-template-columns: 220px minmax(220px, 300px) 1fr;
+  grid-template-columns: 220px minmax(240px, 320px) 1fr;
+  grid-template-rows: 1fr;
   gap: 1.25rem;
   padding: 1.25rem;
-  max-width: 1480px;
-  margin: 0 auto;
-  height: calc(100vh - 56px);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .side-nav {
@@ -225,6 +286,8 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .api-card {
@@ -270,6 +333,12 @@ button:disabled {
   border-color: var(--border-strong);
 }
 
+.side-link:hover:not(.active) {
+  background: var(--surface-low);
+  color: var(--text);
+  border-color: var(--border);
+}
+
 .left-pane,
 .mid-pane,
 .right-pane {
@@ -277,6 +346,11 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  overflow-y: auto;
+}
+
+.left-pane {
+  overflow: hidden;
 }
 
 .filter-row {
@@ -295,14 +369,23 @@ button:disabled {
   padding: 0.5rem;
   display: grid;
   gap: 0.375rem;
-  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .tag-group {
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--background);
-  overflow: hidden;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.tag-group:hover {
+  border-color: var(--border-strong);
+  background: var(--surface);
 }
 
 .tag-header {
@@ -324,6 +407,11 @@ button:disabled {
 
 .tag-header:hover {
   background: var(--surface);
+}
+
+.tag-header:hover .tag-count,
+.tag-header:hover .tag-chevron {
+  color: var(--text);
 }
 
 .tag-name {
@@ -532,6 +620,152 @@ button:disabled {
   font-size: 0.875rem;
 }
 
+.used-schemas-block {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.used-schemas-block h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: "Geist", monospace;
+}
+
+.used-schemas-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.used-schema-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-low);
+}
+
+.used-schema-item[open] {
+  border-color: var(--border-strong);
+}
+
+.used-schema-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  cursor: pointer;
+  list-style: none;
+  padding: 0.65rem 0.75rem;
+}
+
+.used-schema-head::-webkit-details-marker {
+  display: none;
+}
+
+.used-schema-head::after {
+  content: "▾";
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-left: auto;
+  transition: transform 120ms ease;
+}
+
+.used-schema-item[open] .used-schema-head::after {
+  transform: rotate(180deg);
+}
+
+.used-schema-name {
+  color: var(--text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: "Geist", monospace;
+}
+
+.used-schema-head-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.used-schema-count {
+  color: var(--text-subtle);
+  font-size: 0.6875rem;
+  font-family: "Geist", monospace;
+}
+
+.used-schema-kind {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--background);
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: "Geist", monospace;
+}
+
+.used-schema-body {
+  border-top: 1px solid var(--border);
+  padding: 0.6rem 0.75rem 0.75rem;
+}
+
+.used-schema-desc,
+.used-schema-fields {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.used-schema-fields-list {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.used-schema-field-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  padding: 0.32rem 0.45rem;
+}
+
+.used-schema-field-name {
+  font-size: 0.75rem;
+  color: var(--text);
+  font-weight: 600;
+  font-family: "Geist", monospace;
+}
+
+.used-schema-field-type {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-family: "Geist", monospace;
+}
+
+.used-schema-required {
+  margin-left: auto;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: var(--error);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .inline-switch {
   display: inline-flex;
   align-items: center;
@@ -673,10 +907,10 @@ button:disabled {
 
 .response-box pre {
   margin: 0.75rem 0 0;
-  background: #000000;
+  background: var(--code-bg);
   border-radius: 6px;
   border: 1px solid var(--border-strong);
-  color: #ffffff;
+  color: var(--code-fg);
   padding: 0.875rem;
   min-height: 120px;
   max-height: 320px;
@@ -1276,3 +1510,575 @@ button:disabled {
     color: var(--primary-fg);
   }
 }
+
+/* ============================================================================
+ * Content Pane (for non-endpoint screens)
+ * ========================================================================= */
+
+.content-pane {
+  grid-column: 2 / -1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+  padding: 1rem 0;
+}
+
+/* ============================================================================
+ * Schemas View
+ * ========================================================================= */
+
+.schemas-view,
+.security-view,
+.servers-view,
+.settings-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.schemas-list,
+.security-schemes-list,
+.servers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.schema-item,
+.security-scheme-item,
+.server-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  background: var(--background);
+}
+
+.schema-header,
+.scheme-header,
+.server-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.schema-header h3,
+.scheme-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.schema-type,
+.scheme-type-badge {
+  font-family: "Geist", monospace;
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background: var(--surface-low);
+  color: var(--text);
+  border: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.schema-description,
+.scheme-description,
+.server-description {
+  margin: 0 0 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.schema-properties,
+.schema-raw,
+.scheme-raw,
+.server-variables {
+  margin-top: 0.75rem;
+}
+
+.schema-properties summary,
+.schema-raw summary,
+.scheme-raw summary,
+.server-variables summary {
+  cursor: pointer;
+  font-family: "Geist", monospace;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.25rem 0;
+  user-select: none;
+}
+
+.properties-table,
+.variables-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.properties-table th,
+.variables-table th {
+  text-align: left;
+  padding: 0.5rem;
+  background: var(--surface-low);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.properties-table td,
+.variables-table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.prop-name,
+.var-name {
+  font-family: "Geist", monospace;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.prop-type,
+.var-default {
+  font-family: "Geist", monospace;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.prop-desc,
+.var-desc {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.schema-raw pre,
+.scheme-raw pre {
+  margin: 0.5rem 0 0;
+  background: var(--code-bg);
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  color: var(--code-fg);
+  padding: 0.875rem;
+  max-height: 320px;
+  overflow: auto;
+  font-family: "Geist", monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+/* ============================================================================
+ * Security View
+ * ========================================================================= */
+
+.security-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
+}
+
+.security-list li {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.security-list li:last-child {
+  border-bottom: none;
+}
+
+.security-requirement {
+  font-family: "Geist", monospace;
+  font-size: 0.875rem;
+}
+
+.security-requirement strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.security-requirement .scopes {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.scheme-details {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem 1rem;
+  margin: 0.75rem 0;
+  font-size: 0.875rem;
+}
+
+.scheme-details dt {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.scheme-details dd {
+  margin: 0;
+  font-family: "Geist", monospace;
+  color: var(--text);
+}
+
+/* ============================================================================
+ * Servers View
+ * ========================================================================= */
+
+.server-url-input {
+  margin-bottom: 0.5rem;
+}
+
+.server-url {
+  font-family: "Geist", monospace;
+  font-size: 0.875rem;
+  color: var(--text);
+  background: var(--surface-low);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.server-select-btn {
+  white-space: nowrap;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.75rem;
+}
+
+/* ============================================================================
+ * Settings View
+ * ========================================================================= */
+
+.text-muted {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  margin: 0.5rem 0;
+}
+
+.info-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem 1.5rem;
+  margin: 1rem 0;
+  font-size: 0.875rem;
+}
+
+.info-list dt {
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.info-list dd {
+  margin: 0;
+  color: var(--text);
+}
+
+.info-list a {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.info-list a:hover {
+  color: var(--primary);
+}
+
+.info-list ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.info-list li {
+  margin: 0.25rem 0;
+}
+
+.setting-item {
+  margin: 1rem 0;
+}
+
+.setting-item label {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.help-text {
+  font-size: 0.75rem;
+  color: var(--text-subtle);
+  margin: 0.375rem 0 0;
+}
+
+/* ============================================================================
+ * Workspace Selector
+ * ========================================================================= */
+
+.workspace-selector {
+  position: relative;
+}
+
+.workspace-header {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.workspace-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-low);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.workspace-toggle:hover {
+  border-color: var(--border-strong);
+  background: var(--surface);
+}
+
+.workspace-icon {
+  font-size: 1rem;
+}
+
+.workspace-name {
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace-arrow {
+  font-size: 0.625rem;
+  color: var(--text-muted);
+}
+
+.workspace-create-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-low);
+  font-size: 1.125rem;
+  line-height: 1;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.workspace-create-btn:hover {
+  border-color: var(--border-strong);
+  background: var(--surface);
+}
+
+.workspace-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 280px;
+  background: var(--background);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  padding: 0.5rem;
+}
+
+.workspace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.workspace-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.workspace-item:hover {
+  background: var(--surface-low);
+  border-color: var(--border-strong);
+}
+
+.workspace-item.active {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+
+.workspace-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.workspace-item-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 0.125rem;
+}
+
+.workspace-item-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace-item-actions {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+.workspace-rename-btn {
+  height: 24px;
+  padding: 0 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.workspace-rename-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: var(--surface-low);
+}
+
+.workspace-delete-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.workspace-delete-btn:hover {
+  background: var(--error-bg);
+  color: var(--error);
+  border-color: var(--error);
+}
+
+/* ─── Workspace Creation Modal ───────────────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal-content {
+  background: var(--background);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.modal-content h2 {
+  margin: 0 0 1.25rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.form-field {
+  margin-bottom: 1rem;
+}
+
+.form-field label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 0.375rem;
+}
+
+.form-field input,
+.form-field textarea {
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.form-field textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.form-error {
+  margin: -0.5rem 0 1rem;
+  color: var(--error);
+  font-size: 0.8125rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-low);
+  border-color: var(--border-strong);
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--primary-fg);
+  border: 1px solid var(--border-strong);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+

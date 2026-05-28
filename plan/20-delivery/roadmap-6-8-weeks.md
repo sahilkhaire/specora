@@ -1,5 +1,8 @@
 # Weekly Roadmap (6-8 Weeks)
 
+This roadmap defines the v0.1.0 delivery track.
+For the immediate post-v0.1.0 continuation, see `plan/20-delivery/next-iteration-plan-4-weeks.md`.
+
 ## Week 1: Foundation and Contracts
 Deliverables:
 1. Finalize product contract and scope boundaries.

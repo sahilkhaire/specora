@@ -1,58 +1,36 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { Environment } from "./env-types";
 
-function getEnvsKey(workspaceId: string): string {
-  return `specora:workspaces:${workspaceId}:environments`;
-}
+const ENVS_KEY = "specora:environments";
+const ACTIVE_KEY = "specora:activeEnvId";
 
-function getActiveEnvKey(workspaceId: string): string {
-  return `specora:workspaces:${workspaceId}:activeEnvId`;
-}
-
-function load(workspaceId: string | null): Environment[] {
-  if (!workspaceId) return [];
-  
+function load(): Environment[] {
   try {
-    const raw = localStorage.getItem(getEnvsKey(workspaceId));
+    const raw = localStorage.getItem(ENVS_KEY);
     return raw ? (JSON.parse(raw) as Environment[]) : [];
   } catch {
     return [];
   }
 }
 
-function persist(workspaceId: string | null, envs: Environment[]): void {
-  if (!workspaceId) return;
-  localStorage.setItem(getEnvsKey(workspaceId), JSON.stringify(envs));
+function persist(envs: Environment[]): void {
+  localStorage.setItem(ENVS_KEY, JSON.stringify(envs));
 }
 
-function loadActiveEnvId(workspaceId: string | null): string {
-  if (!workspaceId) return "";
-  return localStorage.getItem(getActiveEnvKey(workspaceId)) ?? "";
-}
-workspaceId, updated);
-  }
+export function useEnvironments() {
+  const [environments, setEnvironments] = useState<Environment[]>(load);
+  const [activeEnvId, setActiveEnvId] = useState<string>(() => {
+    try { return localStorage.getItem(ACTIVE_KEY) ?? ""; } catch { return ""; }
+  });
 
-  function updateEnvironment(id: string, patch: Partial<Omit<Environment, "id">>): void {
-    const updated = environments.map((e) => (e.id === id ? { ...e, ...patch } : e));
+  const activeEnv = environments.find((e) => e.id === activeEnvId) ?? null;
+
+  function createEnvironment(data: Omit<Environment, "id">): void {
+    const newEnv: Environment = { id: crypto.randomUUID(), ...data };
+    const updated = [...environments, newEnv];
     setEnvironments(updated);
-    persist(workspaceId, updated);
+    persist(updated);
   }
-
-  function deleteEnvironment(id: string): void {
-    const updated = environments.filter((e) => e.id !== id);
-    setEnvironments(updated);
-    persist(workspaceId, updated);
-    if (activeEnvId === id) {
-      const next = updated[0]?.id ?? "";
-      setActiveEnvId(next);
-      persistActiveEnvId(workspaceId, next);
-    }
-  }
-
-  /** Pass an empty string to clear the active environment. */
-  function switchEnvironment(id: string): void {
-    setActiveEnvId(id);
-    persistActiveEnvId(workspaceId
 
   function updateEnvironment(id: string, patch: Partial<Omit<Environment, "id">>): void {
     const updated = environments.map((e) => (e.id === id ? { ...e, ...patch } : e));
@@ -67,14 +45,13 @@ workspaceId, updated);
     if (activeEnvId === id) {
       const next = updated[0]?.id ?? "";
       setActiveEnvId(next);
-      localStorage.setItem(ACTIVE_KEY, next);
+      try { localStorage.setItem(ACTIVE_KEY, next); } catch { /* noop */ }
     }
   }
 
-  /** Pass an empty string to clear the active environment. */
   function switchEnvironment(id: string): void {
     setActiveEnvId(id);
-    localStorage.setItem(ACTIVE_KEY, id);
+    try { localStorage.setItem(ACTIVE_KEY, id); } catch { /* noop */ }
   }
 
   return {

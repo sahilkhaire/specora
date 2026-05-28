@@ -3,17 +3,53 @@ import {
   detectDefaultServerUrl,
   extractOperations,
   filterOperations,
+  getUsedSchemasForOperation,
+  groupOperationsByTags,
   parseSpecText,
   operationKey
 } from "@/features/spec/spec-utils";
-import { buildRequestUrl, buildAuthHeaders, safeParseRecord, scaffoldFromParameters } from "@/features/tryout/tryout-utils";
+import { applyVariables, buildRequestUrl, buildAuthHeaders, safeParseRecord, scaffoldFromParameters } from "@/features/tryout/tryout-utils";
 import type { AuthConfig, AuthType } from "@/features/tryout/tryout-utils";
-import { useWorkspaces } from "@/features/workspaces/use-workspaces";
-import { WorkspaceSelector } from "@/features/workspaces/WorkspaceSelector";
 import { useEnvironments } from "@/features/environments/use-environments";
 import { EnvPanel } from "@/features/environments/EnvPanel";
+import { SchemasView } from "@/features/schemas/SchemasView";
+import { SecurityView } from "@/features/security/SecurityView";
+import { ServersView } from "@/features/servers/ServersView";
+import { SettingsView } from "@/features/settings/SettingsView";
+import { WorkspaceSelector } from "@/features/workspaces/WorkspaceSelector";
+import { useWorkspaces } from "@/features/workspaces/use-workspaces";
+
+type ActiveSection = "endpoints" | "schemas" | "security" | "servers" | "settings";
 
 type LoadMode = "url" | "upload" | "paste";
+type ThemeMode = "light" | "dark" | "system";
+
+const THEME_STORAGE_KEY = "specora-theme-mode";
+
+function getStoredThemeMode(): ThemeMode {
+  if (typeof window === "undefined") {
+    return "system";
+  }
+
+  const value = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (value === "light" || value === "dark" || value === "system") {
+    return value;
+  }
+
+  return "system";
+}
+
+function getSystemTheme(): "light" | "dark" {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+
+  if (typeof window.matchMedia !== "function") {
+    return "light";
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
 
 function prettyBody(raw: string): string {
   try {
@@ -45,34 +81,37 @@ function methodTone(method: string): string {
     return "method-badge method-delete";
   }
 
-  // Workspace management
-  const {
-    workspaces,
-  
-  // Get spec from active workspace
-  const spec = activeWorkspace?.spec ?? null;
-  
-    activeWorkspace,
-    createWorkspace,
-    updateWorkspaceSpec,
-    deleteWorkspace,
-    switchWorkspace,
-  } = useWorkspaces();
-
-  // Environment management (workspace-scoped)
-  const envHook = useEnvironments(activeWorkspaceId);
-
-  // Create a default workspace if none exists
-  useEffect(() => {
-    if (workspaces.length === 0) {
-      createWorkspace("Default Workspace", "Your first workspace");
-    }
-  }, [workspaces.length, createWorkspace]);
-
   return "method-badge method-default";
 }
 
+function getSchemaFieldType(value: unknown): string {
+  if (!value || typeof value !== "object") {
+    return "unknown";
+  }
+
+  const record = value as Record<string, unknown>;
+  if (typeof record.$ref === "string") {
+    const parts = record.$ref.split("/");
+    return parts[parts.length - 1] ?? "ref";
+  }
+
+  if (typeof record.type === "string") {
+    return record.type;
+  }
+
+  if (Array.isArray(record.oneOf)) return "oneOf";
+  if (Array.isArray(record.anyOf)) return "anyOf";
+  if (Array.isArray(record.allOf)) return "allOf";
+
+  return "unknown";
+}
+
 export function App() {
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredThemeMode());
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => {
+    const initialMode = getStoredThemeMode();
+    return initialMode === "system" ? getSystemTheme() : initialMode;
+  });
   const [loadMode, setLoadMode] = useState<LoadMode>("url");
   const [rawInput, setRawInput] = useState("");
   const [urlInput, setUrlInput] = useState("");
@@ -100,6 +139,115 @@ export function App() {
   const [authKeyName, setAuthKeyName] = useState("X-API-Key");
   const [showSpecLoader, setShowSpecLoader] = useState(false);
   const urlInputRef = useRef<HTMLInputElement>(null);
+  const [isEnvPanelOpen, setIsEnvPanelOpen] = useState(false);
+  const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
+  const [activeSection, setActiveSection] = useState<ActiveSection>("endpoints");
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (themeMode === "system") {
+      if (typeof window.matchMedia !== "function") {
+        setResolvedTheme("light");
+        return;
+      }
+
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      const update = () => setResolvedTheme(media.matches ? "dark" : "light");
+      update();
+
+      if (typeof media.addEventListener === "function") {
+        media.addEventListener("change", update);
+        return () => media.removeEventListener("change", update);
+      }
+
+      media.addListener(update);
+      return () => media.removeListener(update);
+    }
+
+    setResolvedTheme(themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const root = document.documentElement;
+    root.setAttribute("data-theme", resolvedTheme);
+    root.style.colorScheme = resolvedTheme;
+  }, [resolvedTheme]);
+
+  const {
+    workspaces,
+    activeWorkspaceId,
+    activeWorkspace,
+    createWorkspace,
+    updateWorkspaceSpec,
+    renameWorkspace,
+    deleteWorkspace,
+    switchWorkspace,
+  } = useWorkspaces();
+
+  const {
+    environments,
+    activeEnvId,
+    activeEnv,
+    createEnvironment,
+    updateEnvironment,
+    deleteEnvironment,
+    switchEnvironment,
+  } = useEnvironments();
+
+  useEffect(() => {
+    if (workspaces.length === 0) {
+      createWorkspace("Default Workspace", "Primary workspace");
+      return;
+    }
+
+    if (!activeWorkspaceId || !activeWorkspace) {
+      switchWorkspace(workspaces[0].id);
+    }
+  }, [workspaces, activeWorkspaceId, activeWorkspace, createWorkspace, switchWorkspace]);
+
+  useEffect(() => {
+    if (!activeWorkspace) {
+      setSpec(null);
+      setRawInput("");
+      setUrlInput("");
+      setError("");
+      return;
+    }
+
+    setSpec(activeWorkspace.spec);
+    setSelectedOperationKey("");
+    setError("");
+
+    if (!activeWorkspace.specSource) {
+      setRawInput("");
+      setUrlInput("");
+      return;
+    }
+
+    if (activeWorkspace.specSource.type === "url") {
+      setUrlInput(activeWorkspace.specSource.value);
+      setRawInput("");
+      return;
+    }
+
+    setRawInput(activeWorkspace.specSource.value);
+    setUrlInput("");
+  }, [activeWorkspaceId, activeWorkspace]);
 
   const operations = useMemo(() => (spec ? extractOperations(spec) : []), [spec]);
   const filteredOperations = useMemo(() => filterOperations(operations, methodFilter, searchTerm), [operations, searchTerm, methodFilter]);
@@ -118,7 +266,81 @@ export function App() {
     const unique = new Set(operations.map((operation) => operation.method));
     return ["ALL", ...Array.from(unique).sort()];
   }, [operations]);
+
+  const tagGroups = useMemo(() => groupOperationsByTags(filteredOperations), [filteredOperations]);
+  const usedSchemas = useMemo(() => {
+    if (!spec || !selectedOperation) {
+      return [];
+    }
+
+    return getUsedSchemasForOperation(spec, selectedOperation);
+  }, [spec, selectedOperation]);
+  const usedSchemaDetails = useMemo(() => {
+    if (!spec || usedSchemas.length === 0) {
+      return [];
+    }
+
+    const components = (spec.components as Record<string, unknown> | undefined) ?? {};
+    const schemas = (components.schemas as Record<string, unknown> | undefined) ?? {};
+
+    return usedSchemas.map((name) => {
+      const raw = schemas[name];
+      const schema = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+      const type = typeof schema?.type === "string" ? schema.type : "schema";
+      const description = typeof schema?.description === "string" ? schema.description : "";
+      const requiredSet = new Set(
+        Array.isArray(schema?.required)
+          ? schema.required.filter((item): item is string => typeof item === "string")
+          : []
+      );
+
+      const properties =
+        schema?.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties)
+          ? Object.keys(schema.properties as Record<string, unknown>)
+          : [];
+      const propertyMeta = properties.map((propertyName) => {
+        const propSchema = (schema?.properties as Record<string, unknown> | undefined)?.[propertyName];
+        return {
+          name: propertyName,
+          type: getSchemaFieldType(propSchema),
+          required: requiredSet.has(propertyName),
+        };
+      });
+
+      return {
+        name,
+        type,
+        description,
+        properties,
+        propertyMeta,
+      };
+    });
+  }, [spec, usedSchemas]);
+
+  // Auto-expand all tag groups when groups change (e.g. new spec loaded or filter applied).
+  useEffect(() => {
+    setExpandedTags(new Set(tagGroups.map((g) => g.tag)));
+  }, [tagGroups.length]);
+
+  function toggleTag(tag: string) {
+    setExpandedTags((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) next.delete(tag); else next.add(tag);
+      return next;
+    });
+  }
   const info = (spec?.info as Record<string, unknown> | undefined) ?? {};
+
+  // Auto-fill server URL and auth when the active environment switches.
+  useEffect(() => {
+    if (!activeEnv) return;
+    if (activeEnv.baseUrl) setServerUrl(activeEnv.baseUrl);
+    setAuthType(activeEnv.auth.type);
+    setAuthValue(activeEnv.auth.value);
+    setAuthKeyName(activeEnv.auth.keyName);
+  // Only re-run when the active env ID changes, not on every field edit.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeEnvId]);
 
   // When the selected operation changes, auto-scaffold params from the spec definition.
   // We key on the stable string ID so typing in the search box doesn't reset manual edits.
@@ -163,6 +385,9 @@ export function App() {
       setRawInput(text);
       setSelectedOperationKey("");
       setServerUrl(detectDefaultServerUrl(result.spec));
+      if (activeWorkspace) {
+        updateWorkspaceSpec(activeWorkspace.id, { type: "url", value: url }, result.spec);
+      }
     } catch (fetchError) {
       setSpec(null);
       setError(fetchError instanceof Error ? fetchError.message : "Failed to load URL");
@@ -183,6 +408,9 @@ export function App() {
     setSpec(result.spec);
     setSelectedOperationKey("");
     setServerUrl(detectDefaultServerUrl(result.spec));
+    if (activeWorkspace) {
+      updateWorkspaceSpec(activeWorkspace.id, { type: "text", value: rawInput }, result.spec);
+    }
   }
 
   async function loadFromFile(file: File | null) {
@@ -203,6 +431,9 @@ export function App() {
     setSpec(result.spec);
     setSelectedOperationKey("");
     setServerUrl(detectDefaultServerUrl(result.spec));
+    if (activeWorkspace) {
+      updateWorkspaceSpec(activeWorkspace.id, { type: "file", value: text, fileName: file.name }, result.spec);
+    }
   }
 
   async function sendRequest() {
@@ -240,18 +471,23 @@ export function App() {
     setRequestResponse("");
     setRequestHeaders({});
 
+    // Resolve {{varName}} tokens from the active environment before building the request.
+    const vars = activeEnv?.variables ?? {};
+    const applyVars = (obj: Record<string, string>): Record<string, string> =>
+      Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, applyVariables(v, vars)]));
+
     const targetUrl = buildRequestUrl({
-      baseUrl: serverUrl,
+      baseUrl: applyVariables(serverUrl, vars),
       endpointPath: selectedOperation.path,
-      pathParams: parsedPath.data,
-      queryParams: parsedQuery.data
+      pathParams: applyVars(parsedPath.data),
+      queryParams: applyVars(parsedQuery.data),
     });
 
     const method = selectedOperation.method;
     const canSendBody = !["GET", "HEAD"].includes(method);
-    const body = canSendBody && requestBody.trim() ? requestBody : undefined;
+    const body = canSendBody && requestBody.trim() ? applyVariables(requestBody, vars) : undefined;
     const authCfg: AuthConfig = { type: authType, value: authValue, keyName: authKeyName };
-    const mergedHeaders = { ...parsedHeaders.data, ...buildAuthHeaders(authCfg) };
+    const mergedHeaders = applyVars({ ...parsedHeaders.data, ...buildAuthHeaders(authCfg) });
     const start = performance.now();
 
     try {
@@ -316,13 +552,34 @@ export function App() {
           <span className="brand-caption">Modern OpenAPI documentation experience</span>
         </div>
 
-        <nav className="top-links" aria-label="Primary">
-          <button type="button" className="top-link active">Documentation</button>
-          <button type="button" className="top-link">Changelog</button>
-          <button type="button" className="top-link">API Status</button>
-        </nav>
-
         <div className="top-actions">
+          <WorkspaceSelector
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            onSwitch={switchWorkspace}
+            onCreate={(name, description) => {
+              createWorkspace(name, description);
+            }}
+            onRename={renameWorkspace}
+            onDelete={deleteWorkspace}
+          />
+          <button
+            type="button"
+            className="theme-toggle-btn"
+            onClick={() => setThemeMode(resolvedTheme === "dark" ? "light" : "dark")}
+            aria-label={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} theme`}
+            title={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} theme`}
+          >
+            {resolvedTheme === "dark" ? "Light" : "Dark"}
+          </button>
+          <button
+            type="button"
+            className="env-switcher-btn"
+            onClick={() => setIsEnvPanelOpen(true)}
+          >
+            <span className={`env-dot ${activeEnvId ? "env-dot-on" : ""}`} />
+            {activeEnv ? activeEnv.name : "No Environment"}
+          </button>
           <button
             type="button"
             className="import-btn"
@@ -347,15 +604,47 @@ export function App() {
           </div>
 
           <nav className="side-links" aria-label="Sections">
-            <button type="button" className="side-link active">Endpoints</button>
-            <button type="button" className="side-link">Schemas</button>
-            <button type="button" className="side-link">Security</button>
-            <button type="button" className="side-link">Servers</button>
-            <button type="button" className="side-link">Settings</button>
+            <button 
+              type="button" 
+              className={`side-link ${activeSection === "endpoints" ? "active" : ""}`}
+              onClick={() => setActiveSection("endpoints")}
+            >
+              Endpoints
+            </button>
+            <button 
+              type="button" 
+              className={`side-link ${activeSection === "schemas" ? "active" : ""}`}
+              onClick={() => setActiveSection("schemas")}
+            >
+              Schemas
+            </button>
+            <button 
+              type="button" 
+              className={`side-link ${activeSection === "security" ? "active" : ""}`}
+              onClick={() => setActiveSection("security")}
+            >
+              Security
+            </button>
+            <button 
+              type="button" 
+              className={`side-link ${activeSection === "servers" ? "active" : ""}`}
+              onClick={() => setActiveSection("servers")}
+            >
+              Servers
+            </button>
+            <button 
+              type="button" 
+              className={`side-link ${activeSection === "settings" ? "active" : ""}`}
+              onClick={() => setActiveSection("settings")}
+            >
+              Settings
+            </button>
           </nav>
         </aside>
 
-        <section className="left-pane">
+        {activeSection === "endpoints" && (
+          <>
+            <section className="left-pane">
           <div className="filter-row">
             <input
               value={searchTerm}
@@ -375,18 +664,39 @@ export function App() {
           </div>
 
           <div className="operation-list" role="list">
-            {filteredOperations.length > 0 ? filteredOperations.map((operation) => (
-              <button
-                key={operationKey(operation)}
-                className={`operation-row ${selectedOperation && operationKey(selectedOperation) === operationKey(operation) ? "active" : ""}`}
-                type="button"
-                onClick={() => setSelectedOperationKey(operationKey(operation))}
-              >
-                <span className={methodTone(operation.method)}>{operation.method}</span>
-                <span className="op-path">{operation.path}</span>
-                <span className="op-summary">{operation.summary}</span>
-              </button>
-            )) : <p className="empty-message">No operations match your current filters.</p>}
+            {tagGroups.length > 0 ? tagGroups.map((group) => {
+              const isOpen = expandedTags.has(group.tag);
+              return (
+                <div key={group.tag} className="tag-group">
+                  <button
+                    type="button"
+                    className="tag-header"
+                    aria-expanded={isOpen}
+                    onClick={() => toggleTag(group.tag)}
+                  >
+                    <span className="tag-name">{group.tag}</span>
+                    <span className="tag-count">{group.operations.length}</span>
+                    <span className="tag-chevron" style={{ transform: isOpen ? "rotate(90deg)" : undefined }}>▶</span>
+                  </button>
+                  {isOpen ? (
+                    <div className="tag-operations">
+                      {group.operations.map((operation) => (
+                        <button
+                          key={operationKey(operation)}
+                          className={`operation-row ${selectedOperation && operationKey(selectedOperation) === operationKey(operation) ? "active" : ""}`}
+                          type="button"
+                          onClick={() => setSelectedOperationKey(operationKey(operation))}
+                        >
+                          <span className={methodTone(operation.method)}>{operation.method}</span>
+                          <span className="op-path">{operation.path}</span>
+                          <span className="op-summary">{operation.summary}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }) : <p className="empty-message">No operations match your current filters.</p>}
           </div>
         </section>
 
@@ -410,6 +720,43 @@ export function App() {
                   <li>Parameters: {selectedOperation.parameters.length}</li>
                   <li>Request Body: {selectedOperation.requestBody ? "Present" : "None"}</li>
                 </ul>
+
+                <div className="used-schemas-block">
+                  <h3>Used Schemas ({usedSchemas.length})</h3>
+                  {usedSchemaDetails.length > 0 ? (
+                    <div className="used-schemas-list">
+                      {usedSchemaDetails.map((schema) => (
+                        <details key={schema.name} className="used-schema-item">
+                          <summary className="used-schema-head">
+                            <span className="used-schema-name">{schema.name}</span>
+                            <span className="used-schema-head-right">
+                              <span className="used-schema-count">{schema.propertyMeta.length} fields</span>
+                              <span className="used-schema-kind">{schema.type}</span>
+                            </span>
+                          </summary>
+                          <div className="used-schema-body">
+                            {schema.description ? <p className="used-schema-desc">{schema.description}</p> : null}
+                            {schema.propertyMeta.length > 0 ? (
+                              <ul className="used-schema-fields-list">
+                                {schema.propertyMeta.map((field) => (
+                                  <li key={`${schema.name}:${field.name}`} className="used-schema-field-item">
+                                    <span className="used-schema-field-name">{field.name}</span>
+                                    <span className="used-schema-field-type">{field.type}</span>
+                                    {field.required ? <span className="used-schema-required">required</span> : null}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="used-schema-fields">No fields declared.</p>
+                            )}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="empty-message">No component schemas referenced by this endpoint.</p>
+                  )}
+                </div>
               </>
             ) : (
               <p className="empty-message">No operation selected.</p>
@@ -541,6 +888,47 @@ export function App() {
             </div>
           </article>
         </section>
+          </>
+        )}
+
+        {activeSection === "schemas" && (
+          <div className="content-pane">
+            <SchemasView spec={spec} />
+          </div>
+        )}
+
+        {activeSection === "security" && (
+          <div className="content-pane">
+            <SecurityView spec={spec} />
+          </div>
+        )}
+
+        {activeSection === "servers" && (
+          <div className="content-pane">
+            <ServersView 
+              spec={spec} 
+              currentServerUrl={serverUrl} 
+              onServerUrlChange={setServerUrl} 
+            />
+          </div>
+        )}
+
+        {activeSection === "settings" && (
+          <div className="content-pane">
+            <SettingsView 
+              spec={spec} 
+              useProxy={useProxy} 
+              proxyUrl={proxyUrl} 
+              themeMode={themeMode}
+              resolvedTheme={resolvedTheme}
+              onThemeModeChange={setThemeMode}
+              onProxyChange={(use, url) => {
+                setUseProxy(use);
+                setProxyUrl(url);
+              }} 
+            />
+          </div>
+        )}
       </div>
 
       {showSpecLoader && (
@@ -652,11 +1040,46 @@ export function App() {
       )}
 
       <nav className="mobile-bottom-nav" aria-label="Mobile sections">
-        <button type="button" className="active">Endpoints</button>
-        <button type="button">Schemas</button>
-        <button type="button">Servers</button>
-        <button type="button">Settings</button>
+        <button 
+          type="button" 
+          className={activeSection === "endpoints" ? "active" : ""}
+          onClick={() => setActiveSection("endpoints")}
+        >
+          Endpoints
+        </button>
+        <button 
+          type="button" 
+          className={activeSection === "schemas" ? "active" : ""}
+          onClick={() => setActiveSection("schemas")}
+        >
+          Schemas
+        </button>
+        <button 
+          type="button" 
+          className={activeSection === "servers" ? "active" : ""}
+          onClick={() => setActiveSection("servers")}
+        >
+          Servers
+        </button>
+        <button 
+          type="button" 
+          className={activeSection === "settings" ? "active" : ""}
+          onClick={() => setActiveSection("settings")}
+        >
+          Settings
+        </button>
       </nav>
+
+      <EnvPanel
+        isOpen={isEnvPanelOpen}
+        onClose={() => setIsEnvPanelOpen(false)}
+        environments={environments}
+        activeEnvId={activeEnvId}
+        onSwitch={switchEnvironment}
+        onCreate={createEnvironment}
+        onUpdate={updateEnvironment}
+        onDelete={deleteEnvironment}
+      />
     </div>
   );
 }

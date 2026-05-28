@@ -51,3 +51,38 @@ Acceptance Criteria:
 2. As a maintainer, I can onboard contributors through docs.
 Acceptance Criteria:
 - Setup guide verified by new environment run.
+
+## Next Iteration Backlog (Post-v0.1.0)
+
+## Priority N0
+1. N0-1 As a developer, I can rename a workspace without losing linked environments/spec data.
+Acceptance Criteria:
+- Rename updates workspace metadata and preserves workspace ID relations.
+- Rename flow validates empty/duplicate names with clear user feedback.
+
+2. N0-2 As a developer, I receive actionable errors when try-out fails due to network, CORS, auth, or proxy issues.
+Acceptance Criteria:
+- Error states map to clear recovery actions.
+- Coverage includes timeout, unreachable host, and CORS-protected endpoints.
+
+3. N0-3 As a maintainer, proxy and try-out integration paths are validated in automated tests.
+Acceptance Criteria:
+- Integration tests cover successful request, upstream failure, and proxy unavailability.
+- Deterministic exit behavior asserted for CLI proxy error scenarios.
+
+## Priority N1
+1. N1-1 As a developer, large specs remain responsive while browsing operations.
+Acceptance Criteria:
+- Operation list and detail rendering are optimized for large fixture sizes.
+- Benchmark shows p95 first render improvement against v0.1.0 baseline.
+
+2. N1-2 As a maintainer, I can perform a clean-machine contributor setup without manual fixes.
+Acceptance Criteria:
+- Setup docs are dry-run validated on a fresh environment.
+- Any setup friction is documented and resolved.
+
+## Priority N2
+1. N2-1 As a maintainer, I can export and import workspace metadata for backup/migration.
+Acceptance Criteria:
+- Export produces deterministic JSON payload.
+- Import validates schema and handles conflicts safely.
