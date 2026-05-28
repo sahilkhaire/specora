@@ -538,7 +538,7 @@ button:disabled {
   border-top: 1px solid var(--border);
 }
 
-.tag-header {
+button.tag-header {
   width: 100%;
   display: flex;
   align-items: center;
@@ -555,8 +555,13 @@ button:disabled {
   transition: background 100ms ease, color 100ms ease;
 }
 
-.tag-header:hover {
+button.tag-header:hover:not(:disabled) {
   background: var(--surface-low);
+  color: var(--text);
+}
+
+button.tag-header:active:not(:disabled) {
+  transform: none;
 }
 
 .tag-name {
@@ -583,7 +588,8 @@ button:disabled {
   flex-direction: column;
 }
 
-.operation-row {
+button.operation-row {
+  position: relative;
   width: 100%;
   min-width: 0;
   display: grid;
@@ -594,19 +600,74 @@ button:disabled {
   text-align: left;
   border: none;
   border-radius: 4px;
-  padding: 0.3rem 0.15rem;
+  padding: 0.3rem 0.15rem 0.3rem 0.55rem;
   background: transparent;
   color: var(--text);
-  transition: background 80ms ease;
+  font-weight: 400;
+  font-size: inherit;
+  transition: background 120ms ease, color 120ms ease;
 }
 
-.operation-row:hover:not(.active) {
+button.operation-row:active:not(:disabled) {
+  transform: none;
+}
+
+.operation-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.2rem;
+  bottom: 0.2rem;
+  width: 3px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+button.operation-row:hover:not(:disabled):not(.active) {
   background: var(--surface-low);
+  color: var(--text);
 }
 
-.operation-row.active {
+button.operation-row:hover:not(:disabled):not(.active) .op-path {
+  color: var(--text);
+}
+
+button.operation-row:hover:not(:disabled):not(.active) .op-summary {
+  color: var(--text-muted);
+}
+
+.operation-row:hover:not(.active)::before {
+  background: var(--border-strong);
+  opacity: 0.45;
+}
+
+button.operation-row.active,
+button.operation-row.active:hover:not(:disabled) {
+  background: var(--surface-low);
+  color: var(--text);
+}
+
+.operation-row.active::before {
   background: var(--primary);
-  color: var(--primary-fg);
+  transform: scaleY(1);
+}
+
+.operation-row.active:has(.method-get)::before {
+  background: #2e7d32;
+}
+
+.operation-row.active:has(.method-post)::before {
+  background: #1565c0;
+}
+
+.operation-row.active:has(.method-delete)::before {
+  background: #c62828;
+}
+
+.operation-row.active .op-path {
+  font-weight: 600;
+  color: var(--text);
 }
 
 .method-badge {
@@ -623,11 +684,6 @@ button:disabled {
   letter-spacing: 0.04em;
   background: var(--surface-low);
   color: var(--text-muted);
-}
-
-.operation-row.active .method-badge {
-  background: rgba(255, 255, 255, 0.2);
-  color: var(--primary-fg);
 }
 
 .method-get {
@@ -676,10 +732,6 @@ button:disabled {
   white-space: nowrap;
 }
 
-.operation-row.active .op-path {
-  color: var(--primary-fg);
-}
-
 .op-summary {
   grid-column: 2;
   color: var(--text-subtle);
@@ -692,7 +744,7 @@ button:disabled {
 }
 
 .operation-row.active .op-summary {
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--text-muted);
 }
 
 .panel-card,
