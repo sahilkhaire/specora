@@ -7,6 +7,8 @@ export interface DeploymentConfig {
   apiBaseUrl: string;
   enableSaasAuth: boolean;
   embedCdnBase: string;
+  /** Parent domain for published docs subdomains, e.g. `acme.docs.varcore.dev`. */
+  platformDocsDomain: string;
   publicDocsHost?: string;
 }
 
@@ -36,9 +38,19 @@ export function getDeploymentConfig(): DeploymentConfig {
     surface,
     apiBaseUrl: envString("VITE_API_BASE_URL", ""),
     enableSaasAuth: envBool("VITE_ENABLE_SAAS_AUTH", false),
-    embedCdnBase: envString("VITE_EMBED_CDN_BASE", "https://cdn.specora.doc/embed"),
+    embedCdnBase: envString(
+      "VITE_EMBED_CDN_BASE",
+      "https://specora.varcore.dev/embed"
+    ),
+    platformDocsDomain: envString("VITE_PLATFORM_DOCS_DOMAIN", "docs.varcore.dev"),
     publicDocsHost: envString("VITE_PUBLIC_DOCS_HOST", "") || undefined,
   };
+}
+
+/** Read-only docs URL for a workspace slug on the platform subdomain. */
+export function platformPublishUrl(slug: string): string {
+  const host = `${slug}.${deploymentConfig.platformDocsDomain}`;
+  return `https://${host}`;
 }
 
 export const deploymentConfig = getDeploymentConfig();

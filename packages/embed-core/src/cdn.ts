@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { defaultCacheDir, ensureDir, fileExists, readCachedManifest, writeCachedManifest } from "./cache.js";
 import type { EmbedCoreOptions, ResolvedEmbedAssets } from "./types.js";
 
-const DEFAULT_CDN = "https://cdn.specora.doc/embed";
+const DEFAULT_CDN = "https://specora.varcore.dev/embed";
 
 export async function fetchManifest(cdnBase: string, version: string): Promise<{
   version: string;

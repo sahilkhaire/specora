@@ -66,7 +66,9 @@ publishRoutes.put("/workspaces/:workspaceId/publish-settings", async (c) => {
       workspaceId,
       slug,
       hostingType: body.hostingType ?? "platform_subdomain",
-      publicHost: body.publicHost ?? `https://${slug}.specora.doc`,
+      publicHost:
+        body.publicHost ??
+        `https://${slug}.${process.env.INSTANCE_BASE_DOMAIN ?? "docs.varcore.dev"}`,
       customDomain: body.customDomain ?? null,
       customDomainVerifiedAt: null,
       isPublished: body.isPublished ?? false,

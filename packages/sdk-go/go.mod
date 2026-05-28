@@ -1,4 +1,4 @@
-module github.com/specora/specora-go
+module github.com/sahilkhaire/specora/packages/sdk-go
 
 go 1.22
 

@@ -3,69 +3,85 @@ package specora
 import (
 	"encoding/json"
 	"net/http"
-	"os"
-	"strings"
-
-	"gopkg.in/yaml.v3"
+	"sync"
 )
 
-// Config configures the Specora docs http.Handler.
-type Config struct {
-	SpecPath  string
-	MountPath string
-}
-
-// Handler serves a minimal docs shell and the OpenAPI spec JSON.
+// Handler returns an http.Handler that serves Specora API docs at MountPath.
+//
+// It exposes:
+//   - GET {MountPath}/           — interactive docs UI (loaded from Specora CDN)
+//   - GET {MountPath}/openapi.json — OpenAPI document read from SpecPath
+//
+// Mount the handler on your router, for example:
+//
+//	http.Handle("/api-docs/", specora.Handler(specora.Config{SpecPath: "./openapi.yaml"}))
 func Handler(cfg Config) http.Handler {
-	mount := strings.TrimSuffix(cfg.MountPath, "/")
-	if mount == "" {
-		mount = "/api-docs"
-	}
+	mount := cfg.mount()
+	var specCache map[string]any
+	var specMu sync.RWMutex
+	ui := &embedUI{}
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc(mount+"/openapi.json", func(w http.ResponseWriter, r *http.Request) {
-		spec, err := readSpec(cfg.SpecPath)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+	serveSpec := func(w http.ResponseWriter, r *http.Request) {
+		specMu.RLock()
+		cached := specCache
+		specMu.RUnlock()
+
+		if cached == nil {
+			spec, err := readSpec(cfg.SpecPath)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			specMu.Lock()
+			specCache = spec
+			cached = spec
+			specMu.Unlock()
 		}
+
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(spec)
-	})
+		_ = json.NewEncoder(w).Encode(cached)
+	}
+
+	mux.HandleFunc(mount+"/openapi.json", serveSpec)
 
 	mux.HandleFunc(mount+"/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != mount+"/" && r.URL.Path != mount {
+			http.NotFound(w, r)
+			return
+		}
+
+		ui.load(cfg, mount)
+		if ui.err != nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(fallbackHTML(mount, ui.err)))
+			return
+		}
+
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write([]byte(`<!DOCTYPE html><html><body>
-<p>Specora Go mount active. Wire @specora/node for full CDN UI.</p>
-<p><a href="` + mount + `/openapi.json">OpenAPI spec</a></p>
-<script>window.__SPECORA_EMBED__={surface:"embed",specUrl:"` + mount + `/openapi.json",mountPath:"` + mount + `"};</script>
-</body></html>`))
+		_, _ = w.Write([]byte(ui.html))
 	})
 
 	mux.HandleFunc(mount, func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, mount+"/", http.StatusFound)
+		if r.URL.Path == mount {
+			http.Redirect(w, r, mount+"/", http.StatusFound)
+			return
+		}
+		http.NotFound(w, r)
 	})
 
 	return mux
 }
 
-func readSpec(path string) (map[string]interface{}, error) {
-	raw, err := os.ReadFile(path)
+func fallbackHTML(mount string, err error) string {
+	msg := "Specora embed could not load from CDN. Check network access or set CdnBase."
 	if err != nil {
-		return nil, err
+		msg = err.Error()
 	}
-	trimmed := strings.TrimSpace(string(raw))
-	if strings.HasPrefix(trimmed, "{") {
-		var out map[string]interface{}
-		if err := json.Unmarshal(raw, &out); err != nil {
-			return nil, err
-		}
-		return out, nil
-	}
-	var out map[string]interface{}
-	if err := yaml.Unmarshal(raw, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
+	return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Specora</title></head><body>
+<p>` + msg + `</p>
+<p><a href="` + mount + `/openapi.json">OpenAPI JSON</a></p>
+</body></html>`
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { deploymentConfig } from "@/config/deployment";
+import { deploymentConfig, platformPublishUrl } from "@/config/deployment";
 import { apiFetch } from "@/data/api-client";
 
 interface PublishedSite {
@@ -55,9 +55,7 @@ export function PublishSettings({ workspaceId, onClose }: PublishSettingsProps) 
           customDomain: customDomain || undefined,
           isPublished,
           hostingType,
-          publicHost: customDomain
-            ? `https://${customDomain}`
-            : `https://${slug}.specora.doc`,
+          publicHost: customDomain ? `https://${customDomain}` : platformPublishUrl(slug),
         }),
       });
       setSaved(true);
@@ -69,7 +67,7 @@ export function PublishSettings({ workspaceId, onClose }: PublishSettingsProps) 
   const previewUrl = customDomain
     ? `https://${customDomain}`
     : slug
-      ? `https://${slug}.specora.doc`
+      ? platformPublishUrl(slug)
       : "";
 
   return (
@@ -86,7 +84,7 @@ export function PublishSettings({ workspaceId, onClose }: PublishSettingsProps) 
             Host read-only API docs on a subdomain or custom domain. Workflows and try-out stay in the full app.
           </p>
           <label>
-            <span>Slug (specora.doc)</span>
+            <span>Slug ({deploymentConfig.platformDocsDomain})</span>
             <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="acme-api" />
           </label>
           <label>
@@ -100,7 +98,9 @@ export function PublishSettings({ workspaceId, onClose }: PublishSettingsProps) 
           <label>
             <span>Hosting</span>
             <select value={hostingType} onChange={(e) => setHostingType(e.target.value)}>
-              <option value="platform_subdomain">specora.doc subdomain</option>
+              <option value="platform_subdomain">
+                {deploymentConfig.platformDocsDomain} subdomain
+              </option>
               <option value="custom_domain">Custom domain</option>
             </select>
           </label>

@@ -9,12 +9,14 @@ import { publishRoutes } from "./routes/publish.js";
 
 export function createApp(): Hono {
   const app = new Hono();
-  const allowedOrigin = process.env.CORS_ORIGIN ?? "http://localhost:5173";
+  const allowedOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
+    : ["https://specora.varcore.dev", "http://localhost:5173"];
 
   app.use(
     "*",
     cors({
-      origin: allowedOrigin,
+      origin: allowedOrigins,
       credentials: true,
     })
   );

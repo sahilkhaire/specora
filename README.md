@@ -112,6 +112,17 @@ Run web-proxy contract smoke checks:
 npm run smoke:proxy-contract
 ```
 
+## Production
+
+The hosted app is available at **[https://specora.varcore.dev](https://specora.varcore.dev)**.
+
+Production builds use `apps/web/.env.production` (embed CDN, platform docs domain). After a web release, upload the embed bundle to `https://specora.varcore.dev/embed/`:
+
+```bash
+npm run publish:embed-cdn
+# then sync dist/embed/ to your static host under /embed/
+```
+
 ## Cloudflare Pages Deployment
 
 This repository includes a GitHub Actions pipeline at `.github/workflows/deploy-web-cloudflare-pages.yml` to publish `apps/web` to Cloudflare Pages.

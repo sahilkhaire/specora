@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Build embed surface and write CDN manifest under dist/embed/
- * Upload dist/embed/ to your CDN (e.g. cdn.specora.doc/embed/vX.Y.Z and /latest)
+ * Upload dist/embed/ to your CDN (e.g. specora.varcore.dev/embed/vX.Y.Z and /latest)
  */
 import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
