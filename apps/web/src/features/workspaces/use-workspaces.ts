@@ -107,7 +107,9 @@ export function useWorkspaces() {
   const persist = useCallback(
     (next: Workspace[], activeId = activeWorkspaceId) => {
       setWorkspaces(next);
-      void stores.workspaces.save(next);
+      void stores.workspaces.save(next).catch(() => {
+        /* storage full or blocked */
+      });
       void stores.workspaces.setActiveId(activeId);
     },
     [stores.workspaces, activeWorkspaceId]

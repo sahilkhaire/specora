@@ -290,6 +290,10 @@ export function App() {
   } = useEnvironments();
 
   useEffect(() => {
+    if (!workspacesHydrated) {
+      return;
+    }
+
     if (workspaces.length === 0) {
       createWorkspace("Default Workspace", "Primary workspace");
       return;
@@ -298,7 +302,14 @@ export function App() {
     if (!activeWorkspaceId || !activeWorkspace) {
       switchWorkspace(workspaces[0].id);
     }
-  }, [workspaces, activeWorkspaceId, activeWorkspace, createWorkspace, switchWorkspace]);
+  }, [
+    workspacesHydrated,
+    workspaces,
+    activeWorkspaceId,
+    activeWorkspace,
+    createWorkspace,
+    switchWorkspace,
+  ]);
 
   useEffect(() => {
     if (!activeWorkspace) {

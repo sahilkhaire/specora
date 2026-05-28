@@ -1,10 +1,13 @@
 import type { Environment } from "@/features/environments/env-types";
 import type { Workflow } from "@/features/workflows/workflow-types";
-import type { Workspace } from "@/features/workspaces/workspace-types";
 import type { AppDataStores, EnvironmentStore, WorkflowStore, WorkspaceStore } from "./types";
+import {
+  getPersistedActiveWorkspaceId,
+  loadPersistedWorkspaces,
+  savePersistedWorkspaces,
+  setPersistedActiveWorkspaceId,
+} from "./workspace-persistence";
 
-const WORKSPACES_KEY = "specora:workspaces";
-const ACTIVE_WORKSPACE_KEY = "specora:activeWorkspaceId";
 const ENVS_KEY = "specora:environments";
 const ACTIVE_ENV_KEY = "specora:activeEnvId";
 const WORKFLOWS_PREFIX = "specora:workflows:";
@@ -29,25 +32,16 @@ function writeJson(key: string, value: unknown): void {
 
 const workspaceStore: WorkspaceStore = {
   async list() {
-    return readJson<Workspace[]>(WORKSPACES_KEY, []);
+    return loadPersistedWorkspaces();
   },
   async save(workspaces) {
-    writeJson(WORKSPACES_KEY, workspaces);
+    await savePersistedWorkspaces(workspaces);
   },
   async getActiveId() {
-    try {
-      return localStorage.getItem(ACTIVE_WORKSPACE_KEY) ?? "";
-    } catch {
-      return "";
-    }
+    return getPersistedActiveWorkspaceId();
   },
   async setActiveId(id) {
-    writeJson(ACTIVE_WORKSPACE_KEY, id);
-    try {
-      localStorage.setItem(ACTIVE_WORKSPACE_KEY, id);
-    } catch {
-      /* noop */
-    }
+    await setPersistedActiveWorkspaceId(id);
   },
 };
 
