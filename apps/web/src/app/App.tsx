@@ -3,11 +3,16 @@ import {
   detectDefaultServerUrl,
   extractOperations,
   filterOperations,
+  filterPublicOperations,
   getUsedSchemaDetailsForOperation,
   groupOperationsByTags,
   parseSpecText,
   operationKey
 } from "@/features/spec/spec-utils";
+import { deploymentConfig, isEmbedSurface, isFullAppSurface } from "@/config/deployment";
+import { AuthPanel } from "@/features/auth/AuthPanel";
+import { AdminView } from "@/features/admin/AdminView";
+import { PublishSettings } from "@/features/publish/PublishSettings";
 import {
   applyVariables,
   buildRequestUrl,
@@ -25,7 +30,19 @@ import { useWorkflows } from "@/features/workflows/use-workflows";
 import { WorkspaceSelector } from "@/features/workspaces/WorkspaceSelector";
 import { useWorkspaces } from "@/features/workspaces/use-workspaces";
 
-type ActiveSection = "endpoints" | "workflows";
+type ActiveSection = "endpoints" | "workflows" | "admin";
+
+declare global {
+  interface Window {
+    __SPECORA_EMBED__?: {
+      surface?: string;
+      specUrl?: string;
+      mountPath?: string;
+      publicFilter?: string;
+      includeAll?: boolean;
+    };
+  }
+}
 
 type LoadMode = "url" | "upload" | "paste";
 type ThemeMode = "light" | "dark" | "system";
@@ -127,6 +144,36 @@ export function App() {
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
   const [activeSection, setActiveSection] = useState<ActiveSection>("endpoints");
   const [showSettings, setShowSettings] = useState(false);
+  const [showPublishSettings, setShowPublishSettings] = useState(false);
+  const showWorkflowsNav = isFullAppSurface() && deploymentConfig.mode !== "embed";
+  const showTryOut = deploymentConfig.surface !== "docs";
+  const showImportSpec = isFullAppSurface() && !window.__SPECORA_EMBED__?.specUrl;
+
+  useEffect(() => {
+    const specUrl = window.__SPECORA_EMBED__?.specUrl;
+    if (!specUrl) {
+      return;
+    }
+
+    void (async () => {
+      try {
+        const response = await fetch(specUrl);
+        if (!response.ok) {
+          throw new Error(`Unable to load spec (HTTP ${response.status})`);
+        }
+        const text = await response.text();
+        const result = parseSpecText(text);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setSpec(result.spec);
+        setServerUrl(detectDefaultServerUrl(result.spec));
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : "Failed to load embedded spec");
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -236,7 +283,14 @@ export function App() {
     setUrlInput("");
   }, [activeWorkspaceId, activeWorkspace]);
 
-  const operations = useMemo(() => (spec ? extractOperations(spec) : []), [spec]);
+  const operations = useMemo(() => {
+    if (!spec) return [];
+    const all = extractOperations(spec);
+    if (isEmbedSurface() && !window.__SPECORA_EMBED__?.includeAll) {
+      return filterPublicOperations(all, spec);
+    }
+    return all;
+  }, [spec]);
   const filteredOperations = useMemo(() => filterOperations(operations, methodFilter, searchTerm), [operations, searchTerm, methodFilter]);
 
   const selectedOperation = useMemo(() => {
@@ -255,6 +309,13 @@ export function App() {
   }, [operations]);
 
   const tagGroups = useMemo(() => groupOperationsByTags(filteredOperations), [filteredOperations]);
+
+  useEffect(() => {
+    if (tagGroups.length === 0) {
+      return;
+    }
+    setExpandedTags(new Set(tagGroups.map((group) => group.tag)));
+  }, [tagGroups]);
   const usedSchemaDetails = useMemo(() => {
     if (!spec || !selectedOperation) {
       return [];
@@ -361,8 +422,9 @@ export function App() {
     setSpec(result.spec);
     setSelectedOperationKey("");
     setServerUrl(detectDefaultServerUrl(result.spec));
-    if (activeWorkspace) {
-      updateWorkspaceSpec(activeWorkspace.id, { type: "text", value: rawInput }, result.spec);
+    const workspaceId = activeWorkspace?.id ?? activeWorkspaceId;
+    if (workspaceId) {
+      updateWorkspaceSpec(workspaceId, { type: "text", value: rawInput }, result.spec);
     }
   }
 
@@ -499,79 +561,147 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <header className="top-nav">
-        <div className="brand-row">
-          <h1>Specora</h1>
-          <span className="brand-caption">Modern OpenAPI documentation experience</span>
-        </div>
-
-        <div className="top-actions">
-          <WorkspaceSelector
-            workspaces={workspaces}
-            activeWorkspaceId={activeWorkspaceId}
-            onSwitch={switchWorkspace}
-            onCreate={(name, description) => {
-              createWorkspace(name, description);
-            }}
-            onRename={renameWorkspace}
-            onDelete={deleteWorkspace}
-          />
-        </div>
-      </header>
-
-      <div className="dashboard-layout">
-        <aside className="side-nav">
-          <div className="api-card">
-            <p className="api-title">{apiTitle}</p>
-            <p className="api-version">v{apiVersion}</p>
+      <div className="app-body">
+        <aside className="side-rail" aria-label="Main navigation">
+          <div className="side-rail-brand">
+            <span className="side-rail-logo" aria-hidden="true">S</span>
+            <div className="side-rail-brand-text">
+              <h1 className="side-rail-product">Specora</h1>
+              <p className="side-rail-tagline">Modern OpenAPI documentation</p>
+            </div>
           </div>
 
-          <nav className="side-links" aria-label="Sections">
-            <button 
-              type="button" 
-              className={`side-link ${activeSection === "endpoints" ? "active" : ""}`}
+          {isFullAppSurface() ? (
+            <div className="side-rail-workspace">
+              <p className="side-rail-section-label">Workspace</p>
+              <WorkspaceSelector
+                workspaces={workspaces}
+                activeWorkspaceId={activeWorkspaceId}
+                onSwitch={switchWorkspace}
+                onCreate={(name, description) => {
+                  createWorkspace(name, description);
+                }}
+                onRename={renameWorkspace}
+                onDelete={deleteWorkspace}
+              />
+            </div>
+          ) : null}
+
+          <div className="side-rail-account">
+            <AuthPanel />
+          </div>
+
+          <nav className="side-rail-nav" aria-label="Sections">
+            <p className="side-rail-section-label">Navigate</p>
+            <button
+              type="button"
+              className={`side-nav-item ${activeSection === "endpoints" ? "active" : ""}`}
               onClick={() => setActiveSection("endpoints")}
             >
-              Endpoints
+              <span className="side-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 6h16M4 12h16M4 18h10" strokeLinecap="round" />
+                </svg>
+              </span>
+              <span className="side-nav-label">Endpoints</span>
             </button>
-            <button 
-              type="button" 
-              className={`side-link ${activeSection === "workflows" ? "active" : ""}`}
-              onClick={() => setActiveSection("workflows")}
-            >
-              Workflows
-            </button>
+            {showWorkflowsNav ? (
+              <button
+                type="button"
+                className={`side-nav-item ${activeSection === "workflows" ? "active" : ""}`}
+                onClick={() => setActiveSection("workflows")}
+              >
+                <span className="side-nav-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M6 6h4v4H6V6zm8 0h4v4h-4V6zM6 14h4v4H6v-4zm8 0h4v4h-4v-4z" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                <span className="side-nav-label">Workflows</span>
+              </button>
+            ) : null}
+            {(deploymentConfig.mode === "enterprise" || deploymentConfig.mode === "saas") ? (
+              <button
+                type="button"
+                className={`side-nav-item ${activeSection === "admin" ? "active" : ""}`}
+                onClick={() => setActiveSection("admin")}
+              >
+                <span className="side-nav-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.66 0-1.25.4-1.51 1z" />
+                  </svg>
+                </span>
+                <span className="side-nav-label">Admin</span>
+              </button>
+            ) : null}
           </nav>
 
-          <div className="side-nav-footer">
+          <div className="side-rail-tools">
+            <p className="side-rail-section-label">Tools</p>
+            {showImportSpec ? (
+              <button
+                type="button"
+                className="side-tool-btn"
+                onClick={() => {
+                  setShowSpecLoader(true);
+                  setLoadMode("url");
+                  setTimeout(() => urlInputRef.current?.focus(), 50);
+                }}
+              >
+                <span className="side-nav-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 3v12m0 0l4-4m-4 4l-4-4M4 19h16" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                <span className="side-nav-label">Import spec</span>
+              </button>
+            ) : null}
+            {deploymentConfig.mode === "saas" && activeWorkspace ? (
+              <button
+                type="button"
+                className="side-tool-btn"
+                onClick={() => setShowPublishSettings(true)}
+              >
+                <span className="side-nav-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M7 17l9.2-9.2M17 17V7H7" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                <span className="side-nav-label">Publish docs</span>
+              </button>
+            ) : null}
             <button
               type="button"
-              className="side-footer-btn"
-              onClick={() => {
-                setShowSpecLoader(true);
-                setLoadMode("url");
-                setTimeout(() => urlInputRef.current?.focus(), 50);
-              }}
-            >
-              Import Spec
-            </button>
-            <button
-              type="button"
-              className="side-footer-btn"
+              className="side-tool-btn"
               onClick={() => setIsEnvPanelOpen(true)}
             >
-              Environment
+              <span className="side-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 7h16M4 12h10M4 17h7" strokeLinecap="round" />
+                </svg>
+              </span>
+              <span className="side-nav-label">Environment</span>
             </button>
             <button
               type="button"
-              className="side-footer-btn"
+              className="side-tool-btn"
               onClick={() => setShowSettings(true)}
             >
-              Settings
+              <span className="side-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.66 0-1.25.4-1.51 1z" />
+                </svg>
+              </span>
+              <span className="side-nav-label">Settings</span>
             </button>
           </div>
         </aside>
 
+        <main className="main-panel">
+          <div
+            className={`dashboard-layout${activeSection !== "endpoints" ? " dashboard-layout--full" : ""}`}
+          >
         {activeSection === "endpoints" && (
           <>
             <section className="left-pane">
@@ -694,6 +824,7 @@ export function App() {
             )}
           </article>
 
+          {showTryOut ? (
           <article className="detail-card">
             <div className="tryout-head">
               <h2>Try It Out</h2>
@@ -818,11 +949,14 @@ export function App() {
               <pre>{requestResponse || "No response yet."}</pre>
             </div>
           </article>
+          ) : null}
         </section>
           </>
         )}
 
-        {activeSection === "workflows" && (
+        {activeSection === "admin" && <AdminView />}
+
+        {activeSection === "workflows" && showWorkflowsNav && (
           <WorkflowsView
             specLoaded={Boolean(spec)}
             operations={operations}
@@ -839,7 +973,36 @@ export function App() {
             }}
           />
         )}
+          </div>
+        </main>
       </div>
+
+      {showPublishSettings && activeWorkspace ? (
+        <div className="spec-loader-overlay" onClick={() => setShowPublishSettings(false)}>
+          <div
+            className="spec-loader-panel settings-panel"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="spec-loader-header">
+              <h2>Publish docs</h2>
+              <button
+                type="button"
+                className="close-btn"
+                onClick={() => setShowPublishSettings(false)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="spec-loader-content">
+              <PublishSettings
+                workspaceId={activeWorkspace.id}
+                onClose={() => setShowPublishSettings(false)}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showSettings && (
         <div className="spec-loader-overlay" onClick={() => setShowSettings(false)}>

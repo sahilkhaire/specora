@@ -504,6 +504,36 @@ export function getUsedSchemasForOperation(
   return Array.from(schemas).sort((a, b) => a.localeCompare(b));
 }
 
+export function filterPublicOperations(
+  operations: OperationItem[],
+  spec: Record<string, unknown>
+): OperationItem[] {
+  const paths = (spec.paths as Record<string, unknown> | undefined) ?? {};
+
+  return operations.filter((operation) => {
+    if (operation.tags.some((tag) => tag.toLowerCase() === "public")) {
+      return true;
+    }
+
+    const pathItem = paths[operation.path] as Record<string, unknown> | undefined;
+    const opItem = pathItem?.[operation.method.toLowerCase()] as Record<string, unknown> | undefined;
+    if (!opItem) {
+      return false;
+    }
+
+    if (opItem["x-specora-visibility"] === "public") {
+      return true;
+    }
+
+    if (!("security" in opItem)) {
+      return true;
+    }
+
+    const security = opItem.security;
+    return Array.isArray(security) && security.length === 0;
+  });
+}
+
 export function getUsedSchemaDetailsForOperation(
   spec: Record<string, unknown>,
   operation: Pick<OperationItem, "path" | "method">

@@ -1,6 +1,7 @@
 import process from "node:process";
 import { Command } from "commander";
 import { registerExportCommand } from "../commands/export-command.js";
+import { registerDocsCommand } from "../commands/docs-command.js";
 import { registerInspectCommand } from "../commands/inspect-command.js";
 import { registerProxyCommand } from "../commands/proxy-command.js";
 import { registerServeCommand } from "../commands/serve-command.js";
@@ -21,6 +22,7 @@ function createProgram(): Command {
   registerServeCommand(program);
   registerProxyCommand(program);
   registerInspectCommand(program);
+  registerDocsCommand(program);
 
   return program;
 }

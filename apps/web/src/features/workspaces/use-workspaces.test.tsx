@@ -1,6 +1,12 @@
+import React from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
+import { DataProvider } from "@/data/DataProvider";
 import { useWorkspaces } from "./use-workspaces";
+
+function wrapper({ children }: { children: React.ReactNode }) {
+  return <DataProvider>{children}</DataProvider>;
+}
 
 const WORKSPACES_KEY = "specora:workspaces";
 const ACTIVE_WORKSPACE_KEY = "specora:activeWorkspaceId";
@@ -10,7 +16,7 @@ describe("useWorkspaces", () => {
     localStorage.clear();
   });
 
-  it("filters invalid records and sanitizes malformed workspace fields", () => {
+  it("filters invalid records and sanitizes malformed workspace fields", async () => {
     localStorage.setItem(
       WORKSPACES_KEY,
       JSON.stringify([
@@ -39,7 +45,11 @@ describe("useWorkspaces", () => {
       ])
     );
 
-    const { result } = renderHook(() => useWorkspaces());
+    const { result } = renderHook(() => useWorkspaces(), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.workspaces.length).toBeGreaterThanOrEqual(2);
+    });
 
     expect(result.current.workspaces).toHaveLength(2);
     expect(result.current.workspaces[0]?.id).toBe("ws-valid");
@@ -63,7 +73,7 @@ describe("useWorkspaces", () => {
     );
     localStorage.setItem(ACTIVE_WORKSPACE_KEY, "missing-id");
 
-    const { result } = renderHook(() => useWorkspaces());
+    const { result } = renderHook(() => useWorkspaces(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.activeWorkspaceId).toBe("ws-1");

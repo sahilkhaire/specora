@@ -9,3 +9,6 @@ export type {
 
 export { parseAndValidateSpec } from "./parsing/parse-spec.js";
 export { summarizeSpec } from "./summarization/summarize-spec.js";
+export { filterPublicOperations } from "./parsing/public-endpoints.js";
+export type { PublicFilterOptions, PublicFilterStrategy } from "./parsing/public-endpoints.js";
+export type { OperationItem } from "./parsing/operation-types.js";

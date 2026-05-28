@@ -1,8 +1,6 @@
-import { useState, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useDataContext } from "@/data/DataProvider";
 import type { Workspace, SpecSource } from "./workspace-types";
-
-const WORKSPACES_KEY = "specora:workspaces";
-const ACTIVE_WORKSPACE_KEY = "specora:activeWorkspaceId";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -61,69 +59,59 @@ function normalizeWorkspace(value: unknown): Workspace | null {
   };
 }
 
-function loadWorkspaces(): Workspace[] {
-  try {
-    const raw = localStorage.getItem(WORKSPACES_KEY);
-    if (!raw) {
-      return [];
-    }
-
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.map(normalizeWorkspace).filter((workspace): workspace is Workspace => workspace !== null);
-  } catch {
-    return [];
-  }
-}
-
-function persistWorkspaces(workspaces: Workspace[]): void {
-  try {
-    localStorage.setItem(WORKSPACES_KEY, JSON.stringify(workspaces));
-  } catch {
-    // Ignore storage failures to keep UI usable.
-  }
-}
-
-function loadActiveWorkspaceId(): string {
-  try {
-    const value = localStorage.getItem(ACTIVE_WORKSPACE_KEY);
-    return typeof value === "string" ? value : "";
-  } catch {
-    return "";
-  }
-}
-
-function persistActiveWorkspaceId(id: string): void {
-  try {
-    localStorage.setItem(ACTIVE_WORKSPACE_KEY, id);
-  } catch {
-    // Ignore storage failures to keep UI usable.
-  }
+function normalizeWorkspaces(raw: unknown[]): Workspace[] {
+  return raw.map(normalizeWorkspace).filter((w): w is Workspace => w !== null);
 }
 
 export function useWorkspaces() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(loadWorkspaces);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(loadActiveWorkspaceId);
+  const { stores } = useDataContext();
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState("");
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [list, activeId] = await Promise.all([
+        stores.workspaces.list(),
+        stores.workspaces.getActiveId(),
+      ]);
+      if (cancelled) return;
+      setWorkspaces(normalizeWorkspaces(list));
+      setActiveWorkspaceId(activeId);
+      setHydrated(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [stores]);
+
+  useEffect(() => {
+    if (!hydrated) return;
     if (workspaces.length === 0) {
       if (activeWorkspaceId) {
         setActiveWorkspaceId("");
-        persistActiveWorkspaceId("");
+        void stores.workspaces.setActiveId("");
       }
       return;
     }
 
-    const hasActiveWorkspace = workspaces.some((w) => w.id === activeWorkspaceId);
-    if (!hasActiveWorkspace) {
+    const hasActive = workspaces.some((w) => w.id === activeWorkspaceId);
+    if (!hasActive) {
       const fallbackId = workspaces[0].id;
       setActiveWorkspaceId(fallbackId);
-      persistActiveWorkspaceId(fallbackId);
+      void stores.workspaces.setActiveId(fallbackId);
     }
-  }, [workspaces, activeWorkspaceId]);
+  }, [workspaces, activeWorkspaceId, hydrated, stores.workspaces]);
+
+  const persist = useCallback(
+    (next: Workspace[], activeId = activeWorkspaceId) => {
+      setWorkspaces(next);
+      void stores.workspaces.save(next);
+      void stores.workspaces.setActiveId(activeId);
+    },
+    [stores.workspaces, activeWorkspaceId]
+  );
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
 
@@ -138,33 +126,22 @@ export function useWorkspaces() {
       createdAt: now,
       updatedAt: now,
     };
-    
+
     const updated = [...workspaces, newWorkspace];
-    setWorkspaces(updated);
-    persistWorkspaces(updated);
-    
-    // Auto-select the new workspace
     setActiveWorkspaceId(newWorkspace.id);
-    persistActiveWorkspaceId(newWorkspace.id);
-    
+    persist(updated, newWorkspace.id);
     return newWorkspace.id;
-  }, [workspaces]);
+  }, [workspaces, persist]);
 
   const updateWorkspace = useCallback((id: string, patch: Partial<Omit<Workspace, "id" | "createdAt">>): void => {
     const updated = workspaces.map((w) => {
       if (w.id === id) {
-        return {
-          ...w,
-          ...patch,
-          updatedAt: new Date().toISOString(),
-        };
+        return { ...w, ...patch, updatedAt: new Date().toISOString() };
       }
       return w;
     });
-    
-    setWorkspaces(updated);
-    persistWorkspaces(updated);
-  }, [workspaces]);
+    persist(updated);
+  }, [workspaces, persist]);
 
   const updateWorkspaceSpec = useCallback((
     id: string,
@@ -174,36 +151,27 @@ export function useWorkspaces() {
     updateWorkspace(id, { specSource, spec });
   }, [updateWorkspace]);
 
-  const renameWorkspace = useCallback((
-    id: string,
-    name: string,
-    description?: string
-  ): void => {
+  const renameWorkspace = useCallback((id: string, name: string, description?: string): void => {
     updateWorkspace(id, { name, description });
   }, [updateWorkspace]);
 
   const deleteWorkspace = useCallback((id: string): void => {
     const updated = workspaces.filter((w) => w.id !== id);
-    setWorkspaces(updated);
-    persistWorkspaces(updated);
-    
-    // If deleting the active workspace, switch to the first available one
-    if (activeWorkspaceId === id) {
-      const nextId = updated[0]?.id ?? "";
-      setActiveWorkspaceId(nextId);
-      persistActiveWorkspaceId(nextId);
-    }
-  }, [workspaces, activeWorkspaceId]);
+    const nextId = activeWorkspaceId === id ? (updated[0]?.id ?? "") : activeWorkspaceId;
+    setActiveWorkspaceId(nextId);
+    persist(updated, nextId);
+  }, [workspaces, activeWorkspaceId, persist]);
 
   const switchWorkspace = useCallback((id: string): void => {
     setActiveWorkspaceId(id);
-    persistActiveWorkspaceId(id);
-  }, []);
+    void stores.workspaces.setActiveId(id);
+  }, [stores.workspaces]);
 
   return {
     workspaces,
     activeWorkspaceId,
     activeWorkspace,
+    hydrated,
     createWorkspace,
     updateWorkspace,
     updateWorkspaceSpec,

@@ -1,6 +1,16 @@
+import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DataProvider } from "@/data/DataProvider";
 import { App } from "./App";
+
+function renderApp() {
+  return render(
+    <DataProvider>
+      <App />
+    </DataProvider>
+  );
+}
 
 const fixture = `
 openapi: 3.0.3
@@ -34,10 +44,10 @@ describe("App", () => {
   });
 
   it("loads pasted spec and renders summary + operations", async () => {
-    render(<App />);
+    renderApp();
+    expect(await screen.findByRole("button", { name: /Default Workspace/i })).toBeInTheDocument();
 
-    // Open the spec loader overlay
-    fireEvent.click(screen.getByRole("button", { name: "Import Spec" }));
+    fireEvent.click(screen.getByRole("button", { name: /Import spec/i }));
 
     fireEvent.click(screen.getByRole("tab", { name: "Paste" }));
     const textarea = screen.getByPlaceholderText("Paste OpenAPI JSON or YAML here");
@@ -51,10 +61,10 @@ describe("App", () => {
   });
 
   it("filters operations and updates operation detail", async () => {
-    render(<App />);
+    renderApp();
+    expect(await screen.findByRole("button", { name: /Default Workspace/i })).toBeInTheDocument();
 
-    // Open the spec loader overlay
-    fireEvent.click(screen.getByRole("button", { name: "Import Spec" }));
+    fireEvent.click(screen.getByRole("button", { name: /Import spec/i }));
 
     fireEvent.click(screen.getByRole("tab", { name: "Paste" }));
     const textarea = screen.getByPlaceholderText("Paste OpenAPI JSON or YAML here");
@@ -75,7 +85,7 @@ describe("App", () => {
   it("supports workspace lifecycle create rename switch and delete", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
 
-    render(<App />);
+    renderApp();
 
     expect(await screen.findByRole("button", { name: /Default Workspace/i })).toBeInTheDocument();
 
@@ -118,9 +128,10 @@ describe("App", () => {
   it("shows actionable try-out message for direct network failures", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
-    render(<App />);
+    renderApp();
+    expect(await screen.findByRole("button", { name: /Default Workspace/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Import Spec" }));
+    fireEvent.click(screen.getByRole("button", { name: /Import spec/i }));
     fireEvent.click(screen.getByRole("tab", { name: "Paste" }));
     fireEvent.change(screen.getByPlaceholderText("Paste OpenAPI JSON or YAML here"), {
       target: { value: fixture }
