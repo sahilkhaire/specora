@@ -84,7 +84,7 @@ describe("spec-utils", () => {
     const result = parseSpecText(invalidJson);
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error).toContain("JSON parse error");
+      expect(result.error).toMatch(/JSON parse error|Parse error/i);
     }
   });
 

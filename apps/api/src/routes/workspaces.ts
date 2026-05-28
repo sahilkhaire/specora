@@ -60,6 +60,14 @@ workspacesRoutes.put("/", async (c) => {
       description: typeof w.description === "string" ? w.description : null,
       specSourceJson: w.specSource ? JSON.stringify(w.specSource) : null,
       specJson: w.spec ? JSON.stringify(w.spec) : null,
+      collectionJson:
+        typeof (w as { collectionJson?: string }).collectionJson === "string"
+          ? (w as { collectionJson: string }).collectionJson
+          : null,
+      historyJson:
+        typeof (w as { historyJson?: string }).historyJson === "string"
+          ? (w as { historyJson: string }).historyJson
+          : null,
       createdAt: typeof w.createdAt === "string" ? w.createdAt : new Date().toISOString(),
       updatedAt: typeof w.updatedAt === "string" ? w.updatedAt : new Date().toISOString(),
     });
@@ -148,6 +156,84 @@ workspacesRoutes.put("/:workspaceId/workflows", async (c) => {
       payloadJson: JSON.stringify(raw),
     });
   }
+
+  return c.json({ ok: true });
+});
+
+async function assertWorkspaceOwner(userId: string, workspaceId: string) {
+  const owned = await db
+    .select()
+    .from(schema.workspaces)
+    .where(eq(schema.workspaces.id, workspaceId))
+    .limit(1);
+  if (!owned[0] || owned[0].userId !== userId) {
+    return null;
+  }
+  return owned[0];
+}
+
+workspacesRoutes.get("/:workspaceId/collection", async (c) => {
+  const userId = await requireUser(c);
+  if (userId instanceof Response) return userId;
+
+  const workspaceId = c.req.param("workspaceId");
+  const row = await assertWorkspaceOwner(userId, workspaceId);
+  if (!row) return c.json({ error: "Not found" }, 404);
+
+  const collection = row.collectionJson ? JSON.parse(row.collectionJson) : null;
+  return c.json({ collection });
+});
+
+workspacesRoutes.put("/:workspaceId/collection", async (c) => {
+  const userId = await requireUser(c);
+  if (userId instanceof Response) return userId;
+
+  const workspaceId = c.req.param("workspaceId");
+  const row = await assertWorkspaceOwner(userId, workspaceId);
+  if (!row) return c.json({ error: "Not found" }, 404);
+
+  const body = await c.req.json<{ collection?: unknown }>();
+  await db
+    .update(schema.workspaces)
+    .set({
+      collectionJson: body.collection ? JSON.stringify(body.collection) : null,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(schema.workspaces.id, workspaceId));
+
+  return c.json({ ok: true });
+});
+
+workspacesRoutes.get("/:workspaceId/history", async (c) => {
+  const userId = await requireUser(c);
+  if (userId instanceof Response) return userId;
+
+  const workspaceId = c.req.param("workspaceId");
+  const row = await assertWorkspaceOwner(userId, workspaceId);
+  if (!row) return c.json({ error: "Not found" }, 404);
+
+  const history = row.historyJson ? JSON.parse(row.historyJson) : [];
+  return c.json({ history });
+});
+
+workspacesRoutes.put("/:workspaceId/history", async (c) => {
+  const userId = await requireUser(c);
+  if (userId instanceof Response) return userId;
+
+  const workspaceId = c.req.param("workspaceId");
+  const row = await assertWorkspaceOwner(userId, workspaceId);
+  if (!row) return c.json({ error: "Not found" }, 404);
+
+  const body = await c.req.json<{ history?: unknown[] }>();
+  const list = Array.isArray(body.history) ? body.history : [];
+
+  await db
+    .update(schema.workspaces)
+    .set({
+      historyJson: JSON.stringify(list),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(schema.workspaces.id, workspaceId));
 
   return c.json({ ok: true });
 });

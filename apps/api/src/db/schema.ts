@@ -30,6 +30,8 @@ export const workspaces = sqliteTable("workspaces", {
   description: text("description"),
   specSourceJson: text("spec_source_json"),
   specJson: text("spec_json"),
+  collectionJson: text("collection_json"),
+  historyJson: text("history_json"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });

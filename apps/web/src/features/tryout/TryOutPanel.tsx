@@ -45,6 +45,9 @@ interface TryOutPanelProps {
   requestTiming: number | null;
   requestHeaders: Record<string, string>;
   requestResponse: string;
+  onFillEmptyBody?: () => void;
+  onFillExampleBody?: () => void;
+  hasBodySchema?: boolean;
 }
 
 export function TryOutPanel({
@@ -77,6 +80,9 @@ export function TryOutPanel({
   requestTiming,
   requestHeaders,
   requestResponse,
+  onFillEmptyBody,
+  onFillExampleBody,
+  hasBodySchema = false,
 }: TryOutPanelProps) {
   const [tab, setTab] = useState<TryoutTab>("params");
   const [copied, setCopied] = useState<"curl" | "response" | null>(null);
@@ -310,7 +316,23 @@ export function TryOutPanel({
           {tab === "body" ? (
             canSendBody ? (
               <label className="tryout-code-field tryout-code-field--full">
-                <span>Request body</span>
+                <div className="tryout-body-head">
+                  <span>Request body</span>
+                  {hasBodySchema ? (
+                    <span className="tryout-body-actions">
+                      {onFillEmptyBody ? (
+                        <button type="button" className="tryout-ghost-btn" onClick={onFillEmptyBody}>
+                          Empty template
+                        </button>
+                      ) : null}
+                      {onFillExampleBody ? (
+                        <button type="button" className="tryout-ghost-btn" onClick={onFillExampleBody}>
+                          Example template
+                        </button>
+                      ) : null}
+                    </span>
+                  ) : null}
+                </div>
                 <textarea
                   value={requestBody}
                   onChange={(event) => onRequestBodyChange(event.target.value)}

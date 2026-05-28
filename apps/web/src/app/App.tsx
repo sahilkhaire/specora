@@ -27,8 +27,9 @@ import { TryOutPanel } from "@/features/tryout/TryOutPanel";
 import { useEnvironments } from "@/features/environments/use-environments";
 import { EnvPanel } from "@/features/environments/EnvPanel";
 import { SettingsView } from "@/features/settings/SettingsView";
-import { WorkspaceSelector } from "@/features/workspaces/WorkspaceSelector";
 import { useWorkspaces } from "@/features/workspaces/use-workspaces";
+import { ApiClientWorkbench } from "@/app/ApiClientWorkbench";
+import { AppHeader } from "@/app/AppHeader";
 
 declare global {
   interface Window {
@@ -110,6 +111,7 @@ export function App() {
   const [rawInput, setRawInput] = useState("");
   const [urlInput, setUrlInput] = useState("");
   const [spec, setSpec] = useState<Record<string, unknown> | null>(null);
+  const [specVersionLabel, setSpecVersionLabel] = useState("");
   const [error, setError] = useState<string>("");
   const [isLoadingUrl, setIsLoadingUrl] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -155,6 +157,7 @@ export function App() {
   const [isEnvPanelOpen, setIsEnvPanelOpen] = useState(false);
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
   const [showSettings, setShowSettings] = useState(false);
+  const [workbenchHeaderActions, setWorkbenchHeaderActions] = useState<React.ReactNode>(null);
   const showTryOut = !isEmbedSurface();
   const showImportSpec = isFullAppSurface() && !window.__SPECORA_EMBED__?.specUrl;
 
@@ -177,6 +180,7 @@ export function App() {
           return;
         }
         setSpec(result.spec);
+        setSpecVersionLabel(result.version.label);
         setServerUrl(detectDefaultServerUrl(result.spec));
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Failed to load embedded spec");
@@ -327,8 +331,17 @@ export function App() {
 
     if (activeWorkspace.spec) {
       setSpec(activeWorkspace.spec);
+      const versionResult = parseSpecText(
+        activeWorkspace.specSource?.type === "text"
+          ? activeWorkspace.specSource.value
+          : JSON.stringify(activeWorkspace.spec)
+      );
+      if (versionResult.ok) {
+        setSpecVersionLabel(versionResult.version.label);
+      }
     } else if (workspaceChanged) {
       setSpec(null);
+      setSpecVersionLabel("");
     }
 
     if (workspaceChanged && previousWorkspaceId !== "") {
@@ -479,6 +492,7 @@ export function App() {
       }
 
       setSpec(result.spec);
+      setSpecVersionLabel(result.version.label);
       setRawInput(text);
       clearSelectedOperation();
       setServerUrl(detectDefaultServerUrl(result.spec));
@@ -505,6 +519,7 @@ export function App() {
 
     setError("");
     setSpec(result.spec);
+    setSpecVersionLabel(result.version.label);
     clearSelectedOperation();
     setServerUrl(detectDefaultServerUrl(result.spec));
     const workspaceId = activeWorkspace?.id ?? activeWorkspaceId;
@@ -530,6 +545,7 @@ export function App() {
 
     setError("");
     setSpec(result.spec);
+    setSpecVersionLabel(result.version.label);
     clearSelectedOperation();
     setServerUrl(detectDefaultServerUrl(result.spec));
     const workspaceId = activeWorkspace?.id ?? activeWorkspaceId;
@@ -647,83 +663,54 @@ export function App() {
     }
   }
 
+  const useApiClient = Boolean(spec && showTryOut && isFullAppSurface());
+
+  const openSpecLoader = useCallback(() => {
+    setShowSpecLoader(true);
+    setLoadMode("url");
+    setTimeout(() => urlInputRef.current?.focus(), 50);
+  }, []);
+
   return (
-    <div className="app-shell">
+    <div className="app-shell app-shell-with-header">
+      <AppHeader
+        apiTitle={apiTitle}
+        apiVersion={apiVersion}
+        specVersionLabel={specVersionLabel || undefined}
+        hasSpec={Boolean(spec)}
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        onSwitchWorkspace={switchWorkspace}
+        onCreateWorkspace={(name, description) => createWorkspace(name, description)}
+        onRenameWorkspace={renameWorkspace}
+        onDeleteWorkspace={deleteWorkspace}
+        activeEnvName={activeEnv?.name}
+        onOpenEnvironment={() => setIsEnvPanelOpen(true)}
+        onImportSpec={showImportSpec ? openSpecLoader : undefined}
+        onOpenSettings={() => setShowSettings(true)}
+        themeMode={themeMode}
+        onThemeModeChange={setThemeMode}
+        showImportSpec={showImportSpec}
+        extraActions={useApiClient ? workbenchHeaderActions : null}
+      />
+
       <div className="app-body">
-        <aside className="side-rail" aria-label="Main navigation">
-          <div className="side-rail-brand">
-            <span className="side-rail-logo" aria-hidden="true">S</span>
-            <div className="side-rail-brand-text">
-              <h1 className="side-rail-product">Specora</h1>
-              <p className="side-rail-tagline">Browse and try API endpoints</p>
-            </div>
-          </div>
-
-          {isFullAppSurface() ? (
-            <div className="side-rail-workspace">
-              <p className="side-rail-section-label">Workspace</p>
-              <WorkspaceSelector
-                workspaces={workspaces}
-                activeWorkspaceId={activeWorkspaceId}
-                onSwitch={switchWorkspace}
-                onCreate={(name, description) => {
-                  createWorkspace(name, description);
-                }}
-                onRename={renameWorkspace}
-                onDelete={deleteWorkspace}
-              />
-            </div>
-          ) : null}
-
-          <div className="side-rail-tools">
-            <p className="side-rail-section-label">Tools</p>
-            {showImportSpec ? (
-              <button
-                type="button"
-                className="side-tool-btn"
-                onClick={() => {
-                  setShowSpecLoader(true);
-                  setLoadMode("url");
-                  setTimeout(() => urlInputRef.current?.focus(), 50);
-                }}
-              >
-                <span className="side-nav-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 3v12m0 0l4-4m-4 4l-4-4M4 19h16" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span className="side-nav-label">Import spec</span>
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="side-tool-btn"
-              onClick={() => setIsEnvPanelOpen(true)}
-            >
-              <span className="side-nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 7h16M4 12h10M4 17h7" strokeLinecap="round" />
-                </svg>
-              </span>
-              <span className="side-nav-label">Environment</span>
-            </button>
-            <button
-              type="button"
-              className="side-tool-btn"
-              onClick={() => setShowSettings(true)}
-            >
-              <span className="side-nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" />
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.66 0-1.25.4-1.51 1z" />
-                </svg>
-              </span>
-              <span className="side-nav-label">Settings</span>
-            </button>
-          </div>
-        </aside>
-
-        <main className="main-panel">
+        <main className={`main-panel ${useApiClient ? "main-panel-client" : ""}`}>
+          {useApiClient && activeWorkspaceId ? (
+            <ApiClientWorkbench
+              workspaceId={activeWorkspaceId}
+              spec={spec!}
+              operations={operations}
+              onHeaderActionsChange={setWorkbenchHeaderActions}
+              serverUrl={serverUrl}
+              onServerUrlChange={setServerUrl}
+              useProxy={useProxy}
+              onUseProxyChange={setUseProxy}
+              proxyUrl={proxyUrl}
+              onProxyUrlChange={setProxyUrl}
+              activeEnv={activeEnv}
+            />
+          ) : (
           <div className="dashboard-layout">
             <section className="left-pane">
           <div className="filter-row">
@@ -888,6 +875,7 @@ export function App() {
           ) : null}
         </section>
           </div>
+          )}
         </main>
       </div>
 

@@ -1,5 +1,6 @@
 import SwaggerParser from "@apidevtools/swagger-parser";
 import YAML from "yaml";
+import { detectSpecVersion } from "./detect-spec-version.js";
 import type { ParseSpecOptions, ParseSpecResult } from "../types/spec-types.js";
 
 function parseTextInput(value: string): Record<string, unknown> {
@@ -47,9 +48,12 @@ export async function parseAndValidateSpec(options: ParseSpecOptions): Promise<P
       await SwaggerParser.validate(loaded as any);
     }
 
+    const version = detectSpecVersion(loaded);
     return {
       ok: true,
-      spec: normalizeSpec(loaded)
+      spec: normalizeSpec(loaded),
+      version,
+      warnings: []
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown parsing error";

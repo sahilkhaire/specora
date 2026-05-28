@@ -1,0 +1,17 @@
+{
+  "swagger": "2.0",
+  "info": { "title": "Minimal Swagger", "version": "1.0.0" },
+  "host": "api.example.com",
+  "basePath": "/v1",
+  "schemes": ["https"],
+  "paths": {
+    "/pets": {
+      "get": {
+        "summary": "List pets",
+        "operationId": "listPets",
+        "tags": ["pets"],
+        "responses": { "200": { "description": "OK" } }
+      }
+    }
+  }
+}

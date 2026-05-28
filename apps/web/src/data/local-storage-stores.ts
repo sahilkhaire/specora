@@ -1,6 +1,14 @@
+import type { WorkspaceCollectionState, RequestHistoryEntry } from "@/features/collections/collection-types";
 import type { Environment } from "@/features/environments/env-types";
 import type { Workflow } from "@/features/workflows/workflow-types";
-import type { AppDataStores, EnvironmentStore, WorkflowStore, WorkspaceStore } from "./types";
+import type {
+  AppDataStores,
+  CollectionStore,
+  EnvironmentStore,
+  HistoryStore,
+  WorkflowStore,
+  WorkspaceStore
+} from "./types";
 import {
   getPersistedActiveWorkspaceId,
   loadPersistedWorkspaces,
@@ -11,6 +19,8 @@ import {
 const ENVS_KEY = "specora:environments";
 const ACTIVE_ENV_KEY = "specora:activeEnvId";
 const WORKFLOWS_PREFIX = "specora:workflows:";
+const COLLECTIONS_PREFIX = "specora:collections:";
+const HISTORY_PREFIX = "specora:history:";
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -79,10 +89,35 @@ const workflowStore: WorkflowStore = {
   },
 };
 
+const collectionStore: CollectionStore = {
+  async load(workspaceId) {
+    if (!workspaceId) return null;
+    return readJson<WorkspaceCollectionState | null>(`${COLLECTIONS_PREFIX}${workspaceId}`, null);
+  },
+  async save(workspaceId, state) {
+    if (!workspaceId) return;
+    writeJson(`${COLLECTIONS_PREFIX}${workspaceId}`, state);
+  }
+};
+
+const historyStore: HistoryStore = {
+  async list(workspaceId) {
+    if (!workspaceId) return [];
+    return readJson<RequestHistoryEntry[]>(`${HISTORY_PREFIX}${workspaceId}`, []);
+  },
+  async save(workspaceId, entries) {
+    if (!workspaceId) return;
+    writeJson(`${HISTORY_PREFIX}${workspaceId}`, entries.slice(0, 100));
+  }
+};
+
 export function createLocalStorageStores(): AppDataStores {
   return {
     workspaces: workspaceStore,
     environments: environmentStore,
     workflows: workflowStore,
+    collections: collectionStore,
+    history: historyStore
   };
 }
+

@@ -1,0 +1,11 @@
+openapi: 3.0.3
+info:
+  title: Specora CLI Fixture
+  version: 1.2.0
+paths:
+  /users:
+    get:
+      summary: List users
+      responses:
+        "200":
+          description: User list

@@ -7,6 +7,11 @@ export interface RequestConfig {
   queryParams: Record<string, string>;
 }
 
+export function parseRecordJson(value: string): Record<string, string> {
+  const parsed = safeParseRecord(value);
+  return parsed.ok ? parsed.data : {};
+}
+
 export function safeParseRecord(value: string): {
   ok: true;
   data: Record<string, string>;

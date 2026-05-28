@@ -8,13 +8,13 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run -w @specora/core build && npm run -w @specora/embed-core build && npm run -w @specora/cli build && npm run -w @specora/api build && npm run -w @specora/web build",
+    "build": "npm run -w @specora/core build && npm run -w @specora/import-postman build && npm run -w @specora/embed-core build && npm run -w @specora/cli build && npm run -w @specora/api build && npm run -w @specora/web build",
     "build:embed": "npm run -w @specora/web build:embed",
     "dev:web": "npm run -w @specora/web dev",
     "dev:api": "npm run -w @specora/api dev",
     "dev:cli": "npm run -w @specora/cli dev",
-    "lint": "npm run -w @specora/core lint && npm run -w @specora/embed-core lint && npm run -w @specora/cli lint && npm run -w @specora/api lint && npm run -w @specora/web lint",
-    "test": "npm run -w @specora/core test && npm run -w @specora/embed-core test && npm run -w @specora/cli test && npm run -w @specora/api test && npm run -w @specora/web test",
+    "lint": "npm run -w @specora/core lint && npm run -w @specora/import-postman lint && npm run -w @specora/embed-core lint && npm run -w @specora/cli lint && npm run -w @specora/api lint && npm run -w @specora/web lint",
+    "test": "npm run -w @specora/core test && npm run -w @specora/import-postman test && npm run -w @specora/embed-core test && npm run -w @specora/cli test && npm run -w @specora/api test && npm run -w @specora/web test",
     "publish:embed-cdn": "node scripts/publish-embed-cdn.mjs",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "smoke:proxy-contract": "npm exec -w @specora/cli tsx ../../scripts/smoke-proxy-contract.mjs",

@@ -5,9 +5,17 @@ export interface ParseSpecOptions {
   value: string;
 }
 
+export interface SpecVersionInfo {
+  kind: "swagger-2.0" | "openapi-3.0" | "openapi-3.1" | "unknown";
+  raw: string;
+  label: string;
+}
+
 export interface ParseSpecSuccess {
   ok: true;
   spec: Record<string, unknown>;
+  version: SpecVersionInfo;
+  warnings: string[];
 }
 
 export interface ParseSpecFailure {

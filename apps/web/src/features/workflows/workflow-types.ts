@@ -3,6 +3,8 @@ export type WorkflowRunMode = "serial" | "stop-on-error";
 export interface WorkflowStep {
   id: string;
   operationKey: string;
+  /** Preferred reference when using collection-backed requests */
+  savedRequestId?: string;
   method: string;
   path: string;
   summary: string;

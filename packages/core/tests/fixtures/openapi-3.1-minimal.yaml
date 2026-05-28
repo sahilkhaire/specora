@@ -1,0 +1,13 @@
+openapi: 3.1.0
+info:
+  title: Minimal OpenAPI 3.1
+  version: 1.0.0
+paths:
+  /items:
+    get:
+      summary: List items
+      operationId: listItems
+      tags: [items]
+      responses:
+        "200":
+          description: OK

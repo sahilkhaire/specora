@@ -1,3 +1,4 @@
+import type { WorkspaceCollectionState, RequestHistoryEntry } from "@/features/collections/collection-types";
 import type { Environment } from "@/features/environments/env-types";
 import type { Workflow } from "@/features/workflows/workflow-types";
 import type { Workspace } from "@/features/workspaces/workspace-types";
@@ -21,6 +22,14 @@ interface EnvironmentListResponse {
 
 interface WorkflowListResponse {
   workflows: Workflow[];
+}
+
+interface CollectionResponse {
+  collection: WorkspaceCollectionState | null;
+}
+
+interface HistoryResponse {
+  history: RequestHistoryEntry[];
 }
 
 export async function fetchCurrentUser(): Promise<MeResponse["user"]> {
@@ -110,6 +119,34 @@ export function createRemoteStores(): AppDataStores {
         await apiFetch(`/workspaces/${encodeURIComponent(workspaceId)}/workflows`, {
           method: "PUT",
           body: JSON.stringify({ workflows }),
+        });
+      },
+    },
+    collections: {
+      async load(workspaceId) {
+        const data = await apiFetch<CollectionResponse>(
+          `/workspaces/${encodeURIComponent(workspaceId)}/collection`
+        );
+        return data.collection;
+      },
+      async save(workspaceId, state) {
+        await apiFetch(`/workspaces/${encodeURIComponent(workspaceId)}/collection`, {
+          method: "PUT",
+          body: JSON.stringify({ collection: state }),
+        });
+      },
+    },
+    history: {
+      async list(workspaceId) {
+        const data = await apiFetch<HistoryResponse>(
+          `/workspaces/${encodeURIComponent(workspaceId)}/history`
+        );
+        return data.history;
+      },
+      async save(workspaceId, entries) {
+        await apiFetch(`/workspaces/${encodeURIComponent(workspaceId)}/history`, {
+          method: "PUT",
+          body: JSON.stringify({ history: entries }),
         });
       },
     },
