@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "npm run -w @specora/core build && npm run -w @specora/import-postman build && tsc -p tsconfig.json && vite build",
     "build:embed": "npm run -w @specora/core build && npm run -w @specora/import-postman build && tsc -p tsconfig.json && vite build --mode embed",
-    "lint": "tsc -p tsconfig.json --noEmit",
+    "lint": "npm run -w @specora/core build && npm run -w @specora/import-postman build && tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
