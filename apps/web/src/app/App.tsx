@@ -3,7 +3,7 @@ import {
   detectDefaultServerUrl,
   extractOperations,
   filterOperations,
-  getUsedSchemasForOperation,
+  getUsedSchemaDetailsForOperation,
   groupOperationsByTags,
   parseSpecText,
   operationKey
@@ -89,28 +89,6 @@ function methodTone(method: string): string {
   }
 
   return "method-badge method-default";
-}
-
-function getSchemaFieldType(value: unknown): string {
-  if (!value || typeof value !== "object") {
-    return "unknown";
-  }
-
-  const record = value as Record<string, unknown>;
-  if (typeof record.$ref === "string") {
-    const parts = record.$ref.split("/");
-    return parts[parts.length - 1] ?? "ref";
-  }
-
-  if (typeof record.type === "string") {
-    return record.type;
-  }
-
-  if (Array.isArray(record.oneOf)) return "oneOf";
-  if (Array.isArray(record.anyOf)) return "anyOf";
-  if (Array.isArray(record.allOf)) return "allOf";
-
-  return "unknown";
 }
 
 export function App() {
@@ -265,7 +243,7 @@ export function App() {
     }
 
     return filteredOperations.find((operation) => {
-      return operationKey(operation) === selectedOperationKey;
+      return operation.key === selectedOperationKey;
     }) ?? filteredOperations[0] ?? null;
   }, [filteredOperations, selectedOperationKey]);
 
@@ -275,54 +253,13 @@ export function App() {
   }, [operations]);
 
   const tagGroups = useMemo(() => groupOperationsByTags(filteredOperations), [filteredOperations]);
-  const usedSchemas = useMemo(() => {
+  const usedSchemaDetails = useMemo(() => {
     if (!spec || !selectedOperation) {
       return [];
     }
 
-    return getUsedSchemasForOperation(spec, selectedOperation);
+    return getUsedSchemaDetailsForOperation(spec, selectedOperation);
   }, [spec, selectedOperation]);
-  const usedSchemaDetails = useMemo(() => {
-    if (!spec || usedSchemas.length === 0) {
-      return [];
-    }
-
-    const components = (spec.components as Record<string, unknown> | undefined) ?? {};
-    const schemas = (components.schemas as Record<string, unknown> | undefined) ?? {};
-
-    return usedSchemas.map((name) => {
-      const raw = schemas[name];
-      const schema = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
-      const type = typeof schema?.type === "string" ? schema.type : "schema";
-      const description = typeof schema?.description === "string" ? schema.description : "";
-      const requiredSet = new Set(
-        Array.isArray(schema?.required)
-          ? schema.required.filter((item): item is string => typeof item === "string")
-          : []
-      );
-
-      const properties =
-        schema?.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties)
-          ? Object.keys(schema.properties as Record<string, unknown>)
-          : [];
-      const propertyMeta = properties.map((propertyName) => {
-        const propSchema = (schema?.properties as Record<string, unknown> | undefined)?.[propertyName];
-        return {
-          name: propertyName,
-          type: getSchemaFieldType(propSchema),
-          required: requiredSet.has(propertyName),
-        };
-      });
-
-      return {
-        name,
-        type,
-        description,
-        properties,
-        propertyMeta,
-      };
-    });
-  }, [spec, usedSchemas]);
 
   // Auto-expand all tag groups when groups change (e.g. new spec loaded or filter applied).
   useEffect(() => {
@@ -689,10 +626,10 @@ export function App() {
                     <div className="tag-operations">
                       {group.operations.map((operation) => (
                         <button
-                          key={operationKey(operation)}
-                          className={`operation-row ${selectedOperation && operationKey(selectedOperation) === operationKey(operation) ? "active" : ""}`}
+                          key={operation.key}
+                          className={`operation-row ${selectedOperation && selectedOperation.key === operation.key ? "active" : ""}`}
                           type="button"
-                          onClick={() => setSelectedOperationKey(operationKey(operation))}
+                          onClick={() => setSelectedOperationKey(operation.key)}
                         >
                           <span className={methodTone(operation.method)}>{operation.method}</span>
                           <span className="op-path">{operation.path}</span>
@@ -729,7 +666,7 @@ export function App() {
                 </ul>
 
                 <div className="used-schemas-block">
-                  <h3>Used Schemas ({usedSchemas.length})</h3>
+                  <h3>Used Schemas ({usedSchemaDetails.length})</h3>
                   {usedSchemaDetails.length > 0 ? (
                     <div className="used-schemas-list">
                       {usedSchemaDetails.map((schema) => (
@@ -739,6 +676,7 @@ export function App() {
                             <span className="used-schema-head-right">
                               <span className="used-schema-count">{schema.propertyMeta.length} fields</span>
                               <span className="used-schema-kind">{schema.type}</span>
+                              <span className="used-schema-kind">{schema.source}</span>
                             </span>
                           </summary>
                           <div className="used-schema-body">

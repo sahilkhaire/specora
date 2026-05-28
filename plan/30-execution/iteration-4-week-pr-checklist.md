@@ -145,3 +145,24 @@
 Every PR in this checklist must satisfy:
 1. `plan/30-execution/definition-of-done.md`
 2. `plan/40-quality/quality-gates.md`
+
+## Completion Register (2026-05-28)
+1. `N0-1` - Completed
+2. `N0-1b` - Completed
+3. `N0-1c` - Completed
+4. `N0-2` - Completed
+5. `N0-3` - Completed
+6. `N0-3b` - Completed
+7. `N1-1` - Completed
+8. `N1-2` - Completed
+9. `M9-RC` - Completed
+
+## Consolidated Validation Evidence
+1. Core checks:
+   - `npm run lint`
+   - `npm run build`
+   - `npm run test`
+2. Reliability checks:
+   - `npm run smoke:proxy-contract`
+3. Performance checks:
+   - `npm run bench:web-large-spec`

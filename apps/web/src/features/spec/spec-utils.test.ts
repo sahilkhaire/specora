@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { extractOperations, filterOperations, parseSpecText, groupOperationsByTags, getUsedSchemasForOperation } from "./spec-utils";
+import {
+  extractOperations,
+  filterOperations,
+  parseSpecText,
+  groupOperationsByTags,
+  getUsedSchemasForOperation,
+  getUsedSchemaDetailsForOperation
+} from "./spec-utils";
 
 const fixture = `
 openapi: 3.0.3
@@ -197,5 +204,52 @@ components:
 
     const used = getUsedSchemasForOperation(parsed.spec, { path: "/orders", method: "POST" });
     expect(used).toEqual(["CreateOrderRequest", "Customer", "Order"]);
+  });
+
+  it("returns inline schemas for operations without component refs", () => {
+    const specText = `
+openapi: 3.0.3
+info:
+  title: Inline Schemas API
+  version: 1.0.0
+paths:
+  /reports:
+    post:
+      summary: Generate report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from:
+                  type: string
+                to:
+                  type: string
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+`;
+
+    const parsed = parseSpecText(specText);
+    if (!parsed.ok) {
+      throw new Error(parsed.error);
+    }
+
+    const used = getUsedSchemaDetailsForOperation(parsed.spec, { path: "/reports", method: "POST" });
+    expect(used).toHaveLength(2);
+    expect(used.map((schema) => schema.name)).toEqual([
+      "Request Body (application/json)",
+      "Response 200 (application/json)"
+    ]);
+    expect(used.every((schema) => schema.source === "inline")).toBe(true);
   });
 });

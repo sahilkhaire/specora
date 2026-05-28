@@ -24,6 +24,7 @@ export interface OpenApiParameter {
 }
 
 export interface OperationItem {
+  key: string;
   method: string;
   path: string;
   summary: string;
@@ -32,6 +33,7 @@ export interface OperationItem {
   description: string;
   parameters: OpenApiParameter[];
   requestBody: unknown;
+  searchTextLower: string;
 }
 
 /**
@@ -137,15 +139,22 @@ export function extractOperations(spec: Record<string, unknown>): OperationItem[
       .filter(([method]) => methods.has(method.toLowerCase()))
       .map(([method, operation]) => {
         const op = operation as Record<string, unknown>;
+        const normalizedMethod = method.toUpperCase();
+        const operationId = typeof op.operationId === "string" ? op.operationId : "";
         const tags = Array.isArray(op.tags) ? op.tags.filter((tag): tag is string => typeof tag === "string") : [];
+        const summary = typeof op.summary === "string" ? op.summary : "No summary";
+        const description = typeof op.description === "string" ? op.description : "";
+        const key = `${normalizedMethod}:${path}:${operationId}`;
+        const searchTextLower = `${path} ${summary} ${tags.join(" ")}`.toLowerCase();
 
         return {
-          method: method.toUpperCase(),
+          key,
+          method: normalizedMethod,
           path,
-          summary: typeof op.summary === "string" ? op.summary : "No summary",
-          operationId: typeof op.operationId === "string" ? op.operationId : "",
+          summary,
+          operationId,
           tags,
-          description: typeof op.description === "string" ? op.description : "",
+          description,
           parameters: Array.isArray(op.parameters)
             ? (op.parameters as Record<string, unknown>[])
               .filter((p) => p !== null && typeof p === "object" && typeof p.name === "string")
@@ -158,7 +167,8 @@ export function extractOperations(spec: Record<string, unknown>): OperationItem[
                 example: p.example
               }))
             : [],
-          requestBody: op.requestBody
+          requestBody: op.requestBody,
+          searchTextLower
         };
       });
   });
@@ -173,10 +183,7 @@ export function filterOperations(
 
   return operations.filter((operation) => {
     const methodMatch = methodFilter === "ALL" || operation.method === methodFilter;
-    const searchMatch = !query
-      || operation.path.toLowerCase().includes(query)
-      || operation.summary.toLowerCase().includes(query)
-      || operation.tags.some((tag) => tag.toLowerCase().includes(query));
+    const searchMatch = !query || operation.searchTextLower.includes(query);
 
     return methodMatch && searchMatch;
   });
@@ -189,6 +196,19 @@ export function operationKey(operation: Pick<OperationItem, "method" | "path" | 
 export interface TagGroup {
   tag: string;
   operations: OperationItem[];
+}
+
+export interface UsedSchemaDetail {
+  name: string;
+  type: string;
+  description: string;
+  properties: string[];
+  propertyMeta: Array<{
+    name: string;
+    type: string;
+    required: boolean;
+  }>;
+  source: "component" | "inline";
 }
 
 export function groupOperationsByTags(operations: OperationItem[]): TagGroup[] {
@@ -274,6 +294,129 @@ function resolveLocalRef(spec: Record<string, unknown>, ref: string): unknown {
   return current;
 }
 
+function getSchemaFieldType(value: unknown): string {
+  if (!value || typeof value !== "object") {
+    return "unknown";
+  }
+
+  const record = value as Record<string, unknown>;
+  if (typeof record.$ref === "string") {
+    const parts = record.$ref.split("/");
+    return parts[parts.length - 1] ?? "ref";
+  }
+
+  if (typeof record.type === "string") {
+    return record.type;
+  }
+
+  if (Array.isArray(record.oneOf)) return "oneOf";
+  if (Array.isArray(record.anyOf)) return "anyOf";
+  if (Array.isArray(record.allOf)) return "allOf";
+
+  return "unknown";
+}
+
+function buildSchemaDetail(
+  name: string,
+  raw: unknown,
+  source: "component" | "inline"
+): UsedSchemaDetail {
+  const schema = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+  const type = typeof schema?.type === "string" ? schema.type : "schema";
+  const description = typeof schema?.description === "string" ? schema.description : "";
+  const requiredSet = new Set(
+    Array.isArray(schema?.required)
+      ? schema.required.filter((item): item is string => typeof item === "string")
+      : []
+  );
+  const properties =
+    schema?.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties)
+      ? Object.keys(schema.properties as Record<string, unknown>)
+      : [];
+  const propertyMeta = properties.map((propertyName) => {
+    const propSchema = (schema?.properties as Record<string, unknown> | undefined)?.[propertyName];
+    return {
+      name: propertyName,
+      type: getSchemaFieldType(propSchema),
+      required: requiredSet.has(propertyName),
+    };
+  });
+
+  return {
+    name,
+    type,
+    description,
+    properties,
+    propertyMeta,
+    source,
+  };
+}
+
+function collectInlineSchemasForOperation(
+  opItem: Record<string, unknown>,
+  pathItem: Record<string, unknown>
+): Array<{ label: string; schema: Record<string, unknown> }> {
+  const inlineSchemas: Array<{ label: string; schema: Record<string, unknown> }> = [];
+
+  const collectSchemaCandidate = (label: string, value: unknown) => {
+    if (!value || typeof value !== "object") {
+      return;
+    }
+    const schema = value as Record<string, unknown>;
+    if (typeof schema.$ref === "string") {
+      return;
+    }
+    inlineSchemas.push({ label, schema });
+  };
+
+  const collectFromParameters = (parameters: unknown, scope: "Operation" | "Path") => {
+    if (!Array.isArray(parameters)) {
+      return;
+    }
+    parameters.forEach((param, index) => {
+      if (!param || typeof param !== "object") {
+        return;
+      }
+      const entry = param as Record<string, unknown>;
+      const name = typeof entry.name === "string" ? entry.name : `param-${index + 1}`;
+      collectSchemaCandidate(`${scope} Parameter: ${name}`, entry.schema);
+    });
+  };
+
+  const collectFromContent = (labelPrefix: string, content: unknown) => {
+    if (!content || typeof content !== "object") {
+      return;
+    }
+    Object.entries(content as Record<string, unknown>).forEach(([mediaType, mediaTypeValue]) => {
+      if (!mediaTypeValue || typeof mediaTypeValue !== "object") {
+        return;
+      }
+      const mediaRecord = mediaTypeValue as Record<string, unknown>;
+      collectSchemaCandidate(`${labelPrefix} (${mediaType})`, mediaRecord.schema);
+    });
+  };
+
+  collectFromParameters(pathItem.parameters, "Path");
+  collectFromParameters(opItem.parameters, "Operation");
+
+  const requestBody = opItem.requestBody;
+  if (requestBody && typeof requestBody === "object") {
+    collectFromContent("Request Body", (requestBody as Record<string, unknown>).content);
+  }
+
+  const responses = opItem.responses;
+  if (responses && typeof responses === "object") {
+    Object.entries(responses as Record<string, unknown>).forEach(([status, response]) => {
+      if (!response || typeof response !== "object") {
+        return;
+      }
+      collectFromContent(`Response ${status}`, (response as Record<string, unknown>).content);
+    });
+  }
+
+  return inlineSchemas;
+}
+
 export function getUsedSchemasForOperation(
   spec: Record<string, unknown>,
   operation: Pick<OperationItem, "path" | "method">
@@ -334,4 +477,33 @@ export function getUsedSchemasForOperation(
   });
 
   return Array.from(schemas).sort((a, b) => a.localeCompare(b));
+}
+
+export function getUsedSchemaDetailsForOperation(
+  spec: Record<string, unknown>,
+  operation: Pick<OperationItem, "path" | "method">
+): UsedSchemaDetail[] {
+  const paths = (spec.paths as Record<string, unknown> | undefined) ?? {};
+  const pathItem = paths[operation.path] as Record<string, unknown> | undefined;
+  if (!pathItem || typeof pathItem !== "object") {
+    return [];
+  }
+
+  const methodKey = operation.method.toLowerCase();
+  const opItem = pathItem[methodKey] as Record<string, unknown> | undefined;
+  if (!opItem || typeof opItem !== "object") {
+    return [];
+  }
+
+  const componentDetails = getUsedSchemasForOperation(spec, operation).map((name) => {
+    const components = (spec.components as Record<string, unknown> | undefined) ?? {};
+    const schemas = (components.schemas as Record<string, unknown> | undefined) ?? {};
+    return buildSchemaDetail(name, schemas[name], "component");
+  });
+
+  const inlineDetails = collectInlineSchemasForOperation(opItem, pathItem).map(({ label, schema }) =>
+    buildSchemaDetail(label, schema, "inline")
+  );
+
+  return [...componentDetails, ...inlineDetails];
 }

@@ -70,7 +70,7 @@
 2. Prioritize reliability and usability defects over net-new UX breadth.
 3. Any architecture-impacting changes require ADR update before implementation.
 
-## Implementation Start (In Progress)
+## Implementation Status (Closed)
 
 1. Started: N0-1 Workspace rename flow
 - Status: Completed
@@ -83,14 +83,49 @@
   - Add component tests for rename success + duplicate prevention
 
 2. Next implementation target: N0-1b Workspace state recovery hardening
-- Status: In progress
+- Status: Completed
 - Current implementation scope:
   - Sanitize malformed workspace records from localStorage
   - Self-heal missing/invalid active workspace ID to safe fallback
   - Add hook tests for malformed storage and fallback behavior
 
 3. Next implementation target: N0-1c Workspace lifecycle regression gate
-- Status: In progress
+- Status: Completed
 - Current implementation scope:
   - Add create -> rename -> switch -> delete flow test to app suite
   - Ensure lifecycle coverage runs in default web test run
+
+4. Next implementation target: N0-2 Try-out error taxonomy and action mapping
+- Status: Completed
+- Current implementation scope:
+  - Added deterministic mapping for timeout, CORS, auth, network, and proxy failure modes
+  - Added unit and app-level rendering tests for actionable error messaging
+
+5. Next implementation target: N0-3 Proxy failure-path integration tests
+- Status: Completed
+- Current implementation scope:
+  - Hardened proxy invalid target, timeout, and network failure responses
+  - Added integration coverage for upstream 5xx, timeout, invalid URL, and unreachable target
+
+6. Next implementation target: N0-3b Web-proxy contract checks
+- Status: Completed
+- Current implementation scope:
+  - Added contract document for request/response/error payload shape
+  - Added smoke script for contract validation with fixture endpoints
+
+7. Next implementation target: N1-1 Large-spec rendering optimization
+- Status: Completed
+- Current implementation scope:
+  - Reduced operation list hot-path overhead by precomputing stable keys and searchable text
+  - Added benchmark script and report with p95 improvement evidence
+
+8. Next implementation target: N1-2 Contributor clean-machine validation
+- Status: Completed
+- Current implementation scope:
+  - Updated onboarding and setup docs with clean-machine checklist and proxy reliability validation steps
+
+9. Next implementation target: M9-RC Regression sweep and release prep
+- Status: Completed
+- Current implementation scope:
+  - Recorded final gate evidence and signoff notes in quality and release docs
+  - Confirmed lint/build/test and smoke checks are green

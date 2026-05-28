@@ -86,3 +86,11 @@ Acceptance Criteria:
 Acceptance Criteria:
 - Export produces deterministic JSON payload.
 - Import validates schema and handles conflicts safely.
+
+## Iteration 4 Closeout Snapshot (2026-05-28)
+1. Completed N0 items:
+   - `N0-1`, `N0-1b`, `N0-1c`, `N0-2`, `N0-3`, `N0-3b`
+2. Completed N1 items:
+   - `N1-1`, `N1-2`
+3. Remaining next-iteration candidate:
+   - `N2-1` (deferred; outside reliability/performance stabilization scope)

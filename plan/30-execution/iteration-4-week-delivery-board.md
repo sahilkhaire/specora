@@ -132,3 +132,29 @@
 1. Daily: item status (Not Started, In Progress, Blocked, Done).
 2. Weekly: milestone health (On Track, At Risk, Off Track).
 3. Closeout: KPI report against M7/M8/M9 exit criteria.
+
+## Closeout Status (2026-05-28)
+
+### M7 Workspace Stability and Safety
+1. `N0-1` Workspace rename flow - **Done**
+   - Evidence: `apps/web/src/features/workspaces/WorkspaceSelector.test.tsx`, `apps/web/src/features/workspaces/use-workspaces.ts`
+2. `N0-1b` Workspace state recovery hardening - **Done**
+   - Evidence: `apps/web/src/features/workspaces/use-workspaces.test.tsx`
+3. `N0-1c` Workspace lifecycle regression gate - **Done**
+   - Evidence: `apps/web/src/app/App.test.tsx`
+
+### M8 Try-Out and Proxy Reliability
+1. `N0-2` Try-out error taxonomy and action mapping - **Done**
+   - Evidence: `apps/web/src/features/tryout/tryout-utils.ts`, `apps/web/src/features/tryout/tryout-utils.test.ts`
+2. `N0-3` Proxy failure-path integration tests - **Done**
+   - Evidence: `packages/cli/tests/proxy.integration.test.ts`, `packages/cli/src/server/proxy-server.ts`
+3. `N0-3b` Web + proxy contract checks - **Done**
+   - Evidence: `plan/30-execution/web-proxy-contract-checks.md`, `scripts/smoke-proxy-contract.mjs`
+
+### M9 Performance and Patch Readiness
+1. `N1-1` Large-spec rendering optimization - **Done**
+   - Evidence: `apps/web/src/features/spec/spec-utils.ts`, `scripts/benchmark-large-spec-render.mjs`, `plan/30-execution/n1-1-large-spec-benchmark-report.md`
+2. `N1-2` Contributor clean-machine validation - **Done**
+   - Evidence: `CONTRIBUTING.md`, `README.md`
+3. `M9-RC` Regression sweep and release prep - **Done**
+   - Evidence: `plan/20-delivery/release-checklist.md`, `plan/40-quality/quality-gates.md`
