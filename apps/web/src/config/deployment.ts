@@ -35,7 +35,7 @@ export function getDeploymentConfig(): DeploymentConfig {
     mode,
     surface,
     apiBaseUrl: envString("VITE_API_BASE_URL", ""),
-    enableSaasAuth: envBool("VITE_ENABLE_SAAS_AUTH", mode === "saas" && surface === "full"),
+    enableSaasAuth: envBool("VITE_ENABLE_SAAS_AUTH", false),
     embedCdnBase: envString("VITE_EMBED_CDN_BASE", "https://cdn.specora.doc/embed"),
     publicDocsHost: envString("VITE_PUBLIC_DOCS_HOST", "") || undefined,
   };
@@ -49,4 +49,12 @@ export function isEmbedSurface(): boolean {
 
 export function isFullAppSurface(): boolean {
   return deploymentConfig.surface === "full";
+}
+
+/** SaaS or enterprise full app — user imports specs into workspaces (not embed/docs). */
+export function isHostedApp(): boolean {
+  return (
+    isFullAppSurface() &&
+    (deploymentConfig.mode === "saas" || deploymentConfig.mode === "enterprise")
+  );
 }

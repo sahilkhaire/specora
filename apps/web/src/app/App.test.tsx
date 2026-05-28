@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DataProvider } from "@/data/DataProvider";
 import { App } from "./App";
@@ -46,8 +46,7 @@ describe("App", () => {
   it("loads pasted spec and renders summary + operations", async () => {
     renderApp();
     expect(await screen.findByRole("button", { name: /Default Workspace/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /Import spec/i }));
+    expect(await screen.findByRole("heading", { name: /Add your API specification/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Paste" }));
     const textarea = screen.getByPlaceholderText("Paste OpenAPI JSON or YAML here");
@@ -55,16 +54,16 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Parse Pasted Spec" }));
 
-    expect((await screen.findAllByText("UI Test API")).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByRole("button", { name: /List pets/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Create order/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /List pets/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Create order/i })).toBeInTheDocument();
+    });
   });
 
   it("filters operations and updates operation detail", async () => {
     renderApp();
     expect(await screen.findByRole("button", { name: /Default Workspace/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /Import spec/i }));
+    await screen.findByRole("heading", { name: /Add your API specification/i });
 
     fireEvent.click(screen.getByRole("tab", { name: "Paste" }));
     const textarea = screen.getByPlaceholderText("Paste OpenAPI JSON or YAML here");
@@ -130,8 +129,7 @@ describe("App", () => {
 
     renderApp();
     expect(await screen.findByRole("button", { name: /Default Workspace/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /Import spec/i }));
+    await screen.findByRole("heading", { name: /Add your API specification/i });
     fireEvent.click(screen.getByRole("tab", { name: "Paste" }));
     fireEvent.change(screen.getByPlaceholderText("Paste OpenAPI JSON or YAML here"), {
       target: { value: fixture }
