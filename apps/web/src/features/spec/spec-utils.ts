@@ -294,6 +294,24 @@ function resolveLocalRef(spec: Record<string, unknown>, ref: string): unknown {
   return current;
 }
 
+function decodeRefToken(token: string): string {
+  return decodeURIComponent(token).replace(/~1/g, "/").replace(/~0/g, "~");
+}
+
+function extractSchemaNameFromRef(ref: string): string | null {
+  const componentMatch = ref.match(/^#\/components\/schemas\/([^/]+)$/);
+  if (componentMatch && componentMatch[1]) {
+    return decodeRefToken(componentMatch[1]);
+  }
+
+  const definitionsMatch = ref.match(/^#\/definitions\/([^/]+)$/);
+  if (definitionsMatch && definitionsMatch[1]) {
+    return decodeRefToken(definitionsMatch[1]);
+  }
+
+  return null;
+}
+
 function getSchemaFieldType(value: unknown): string {
   if (!value || typeof value !== "object") {
     return "unknown";
@@ -324,9 +342,10 @@ function buildSchemaDetail(
   const schema = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
   const type = typeof schema?.type === "string" ? schema.type : "schema";
   const description = typeof schema?.description === "string" ? schema.description : "";
+  const required = schema?.required;
   const requiredSet = new Set(
-    Array.isArray(schema?.required)
-      ? schema.required.filter((item): item is string => typeof item === "string")
+    Array.isArray(required)
+      ? required.filter((item): item is string => typeof item === "string")
       : []
   );
   const properties =
@@ -380,6 +399,11 @@ function collectInlineSchemasForOperation(
       const entry = param as Record<string, unknown>;
       const name = typeof entry.name === "string" ? entry.name : `param-${index + 1}`;
       collectSchemaCandidate(`${scope} Parameter: ${name}`, entry.schema);
+
+      // Swagger 2 body/form parameters can carry inline schemas under "items".
+      if (entry.in === "formData") {
+        collectSchemaCandidate(`${scope} Form Field: ${name}`, entry.items);
+      }
     });
   };
 
@@ -410,7 +434,9 @@ function collectInlineSchemasForOperation(
       if (!response || typeof response !== "object") {
         return;
       }
-      collectFromContent(`Response ${status}`, (response as Record<string, unknown>).content);
+      const responseRecord = response as Record<string, unknown>;
+      collectFromContent(`Response ${status}`, responseRecord.content);
+      collectSchemaCandidate(`Response ${status}`, responseRecord.schema);
     });
   }
 
@@ -468,12 +494,11 @@ export function getUsedSchemasForOperation(
 
   const schemas = new Set<string>();
   allRefs.forEach((ref) => {
-    const match = ref.match(/^#\/components\/schemas\/([^/]+)$/);
-    if (!match || !match[1]) {
+    const schemaName = extractSchemaNameFromRef(ref);
+    if (!schemaName) {
       return;
     }
-
-    schemas.add(decodeURIComponent(match[1]).replace(/~1/g, "/").replace(/~0/g, "~"));
+    schemas.add(schemaName);
   });
 
   return Array.from(schemas).sort((a, b) => a.localeCompare(b));
@@ -495,10 +520,13 @@ export function getUsedSchemaDetailsForOperation(
     return [];
   }
 
+  const components = (spec.components as Record<string, unknown> | undefined) ?? {};
+  const componentSchemas = (components.schemas as Record<string, unknown> | undefined) ?? {};
+  const definitionSchemas = (spec.definitions as Record<string, unknown> | undefined) ?? {};
+
   const componentDetails = getUsedSchemasForOperation(spec, operation).map((name) => {
-    const components = (spec.components as Record<string, unknown> | undefined) ?? {};
-    const schemas = (components.schemas as Record<string, unknown> | undefined) ?? {};
-    return buildSchemaDetail(name, schemas[name], "component");
+    const resolvedSchema = componentSchemas[name] ?? definitionSchemas[name];
+    return buildSchemaDetail(name, resolvedSchema, "component");
   });
 
   const inlineDetails = collectInlineSchemasForOperation(opItem, pathItem).map(({ label, schema }) =>

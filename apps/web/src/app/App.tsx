@@ -19,14 +19,11 @@ import {
 import type { AuthConfig, AuthType } from "@/features/tryout/tryout-utils";
 import { useEnvironments } from "@/features/environments/use-environments";
 import { EnvPanel } from "@/features/environments/EnvPanel";
-import { SchemasView } from "@/features/schemas/SchemasView";
-import { SecurityView } from "@/features/security/SecurityView";
-import { ServersView } from "@/features/servers/ServersView";
 import { SettingsView } from "@/features/settings/SettingsView";
 import { WorkspaceSelector } from "@/features/workspaces/WorkspaceSelector";
 import { useWorkspaces } from "@/features/workspaces/use-workspaces";
 
-type ActiveSection = "endpoints" | "schemas" | "security" | "servers" | "settings";
+type ActiveSection = "endpoints" | "workflows";
 
 type LoadMode = "url" | "upload" | "paste";
 type ThemeMode = "light" | "dark" | "system";
@@ -507,36 +504,6 @@ export function App() {
             onRename={renameWorkspace}
             onDelete={deleteWorkspace}
           />
-          <button
-            type="button"
-            className="theme-toggle-btn"
-            onClick={() => setThemeMode(resolvedTheme === "dark" ? "light" : "dark")}
-            aria-label={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} theme`}
-            title={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} theme`}
-          >
-            {resolvedTheme === "dark" ? "Light" : "Dark"}
-          </button>
-          <button
-            type="button"
-            className="env-switcher-btn"
-            onClick={() => setIsEnvPanelOpen(true)}
-          >
-            <span className={`env-dot ${activeEnvId ? "env-dot-on" : ""}`} />
-            {activeEnv ? activeEnv.name : "No Environment"}
-          </button>
-          <button
-            type="button"
-            className="import-btn"
-            onClick={() => {
-              setShowSpecLoader(!showSpecLoader);
-              if (!showSpecLoader) {
-                setLoadMode("url");
-                setTimeout(() => urlInputRef.current?.focus(), 50);
-              }
-            }}
-          >
-            {showSpecLoader ? "Close" : "Import Spec"}
-          </button>
         </div>
       </header>
 
@@ -557,31 +524,10 @@ export function App() {
             </button>
             <button 
               type="button" 
-              className={`side-link ${activeSection === "schemas" ? "active" : ""}`}
-              onClick={() => setActiveSection("schemas")}
+              className={`side-link ${activeSection === "workflows" ? "active" : ""}`}
+              onClick={() => setActiveSection("workflows")}
             >
-              Schemas
-            </button>
-            <button 
-              type="button" 
-              className={`side-link ${activeSection === "security" ? "active" : ""}`}
-              onClick={() => setActiveSection("security")}
-            >
-              Security
-            </button>
-            <button 
-              type="button" 
-              className={`side-link ${activeSection === "servers" ? "active" : ""}`}
-              onClick={() => setActiveSection("servers")}
-            >
-              Servers
-            </button>
-            <button 
-              type="button" 
-              className={`side-link ${activeSection === "settings" ? "active" : ""}`}
-              onClick={() => setActiveSection("settings")}
-            >
-              Settings
+              Workflows
             </button>
           </nav>
         </aside>
@@ -670,7 +616,7 @@ export function App() {
                   {usedSchemaDetails.length > 0 ? (
                     <div className="used-schemas-list">
                       {usedSchemaDetails.map((schema) => (
-                        <details key={schema.name} className="used-schema-item">
+                        <details key={`${schema.source}:${schema.name}`} className="used-schema-item">
                           <summary className="used-schema-head">
                             <span className="used-schema-name">{schema.name}</span>
                             <span className="used-schema-head-right">
@@ -699,7 +645,7 @@ export function App() {
                       ))}
                     </div>
                   ) : (
-                    <p className="empty-message">No component schemas referenced by this endpoint.</p>
+                    <p className="empty-message">No schemas detected for this endpoint.</p>
                   )}
                 </div>
               </>
@@ -836,30 +782,34 @@ export function App() {
           </>
         )}
 
-        {activeSection === "schemas" && (
+        {activeSection === "workflows" && (
           <div className="content-pane">
-            <SchemasView spec={spec} />
-          </div>
-        )}
-
-        {activeSection === "security" && (
-          <div className="content-pane">
-            <SecurityView spec={spec} />
-          </div>
-        )}
-
-        {activeSection === "servers" && (
-          <div className="content-pane">
-            <ServersView 
-              spec={spec} 
-              currentServerUrl={serverUrl} 
-              onServerUrlChange={setServerUrl} 
-            />
-          </div>
-        )}
-
-        {activeSection === "settings" && (
-          <div className="content-pane">
+            <article className="detail-card">
+              <div className="tryout-head">
+                <h2>Workflows</h2>
+              </div>
+              <div className="workflow-actions">
+                <button
+                  type="button"
+                  className="import-btn"
+                  onClick={() => {
+                    setShowSpecLoader(true);
+                    setLoadMode("url");
+                    setTimeout(() => urlInputRef.current?.focus(), 50);
+                  }}
+                >
+                  Import Spec
+                </button>
+                <button
+                  type="button"
+                  className="env-switcher-btn"
+                  onClick={() => setIsEnvPanelOpen(true)}
+                >
+                  <span className={`env-dot ${activeEnvId ? "env-dot-on" : ""}`} />
+                  {activeEnv ? activeEnv.name : "No Environment"}
+                </button>
+              </div>
+            </article>
             <SettingsView 
               spec={spec} 
               useProxy={useProxy} 
@@ -994,24 +944,10 @@ export function App() {
         </button>
         <button 
           type="button" 
-          className={activeSection === "schemas" ? "active" : ""}
-          onClick={() => setActiveSection("schemas")}
+          className={activeSection === "workflows" ? "active" : ""}
+          onClick={() => setActiveSection("workflows")}
         >
-          Schemas
-        </button>
-        <button 
-          type="button" 
-          className={activeSection === "servers" ? "active" : ""}
-          onClick={() => setActiveSection("servers")}
-        >
-          Servers
-        </button>
-        <button 
-          type="button" 
-          className={activeSection === "settings" ? "active" : ""}
-          onClick={() => setActiveSection("settings")}
-        >
-          Settings
+          Workflows
         </button>
       </nav>
 

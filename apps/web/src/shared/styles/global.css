@@ -187,6 +187,7 @@ button:disabled {
 }
 
 .top-actions {
+  margin-left: auto;
   display: flex;
   gap: 0.5rem;
 }
@@ -372,6 +373,7 @@ button:disabled {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
@@ -439,6 +441,7 @@ button:disabled {
 
 .operation-row {
   width: 100%;
+  min-width: 0;
   display: grid;
   grid-template-columns: 52px 1fr;
   gap: 0.375rem 0.5rem;
@@ -491,6 +494,10 @@ button:disabled {
   font-family: "Geist", monospace;
   font-weight: 500;
   font-size: 0.875rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .operation-row.active .op-path {
@@ -501,6 +508,8 @@ button:disabled {
   grid-column: 2;
   color: var(--text-muted);
   font-size: 0.75rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .operation-row.active .op-summary {
@@ -1487,7 +1496,7 @@ button:disabled {
     border-top: 1px solid var(--border-strong);
     background: var(--background);
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 0.25rem;
     padding: 0.5rem;
     z-index: 5;
@@ -1509,6 +1518,12 @@ button:disabled {
     background: var(--primary);
     color: var(--primary-fg);
   }
+}
+
+.workflow-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 /* ============================================================================

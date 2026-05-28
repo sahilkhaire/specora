@@ -252,4 +252,47 @@ paths:
     ]);
     expect(used.every((schema) => schema.source === "inline")).toBe(true);
   });
+
+  it("includes Swagger 2 definitions referenced by endpoint responses", () => {
+    const specText = `
+swagger: "2.0"
+info:
+  title: Swagger Definitions API
+  version: 1.0.0
+paths:
+  /reports:
+    get:
+      summary: List reports
+      responses:
+        "200":
+          description: ok
+          schema:
+            $ref: '#/definitions/ReportList'
+definitions:
+  ReportList:
+    type: object
+    properties:
+      items:
+        type: array
+        items:
+          $ref: '#/definitions/Report'
+  Report:
+    type: object
+    properties:
+      id:
+        type: string
+`;
+
+    const parsed = parseSpecText(specText);
+    if (!parsed.ok) {
+      throw new Error(parsed.error);
+    }
+
+    const usedNames = getUsedSchemasForOperation(parsed.spec, { path: "/reports", method: "GET" });
+    expect(usedNames).toEqual(["Report", "ReportList"]);
+
+    const details = getUsedSchemaDetailsForOperation(parsed.spec, { path: "/reports", method: "GET" });
+    expect(details.map((detail) => detail.name)).toContain("ReportList");
+    expect(details.map((detail) => detail.name)).toContain("Report");
+  });
 });
