@@ -163,8 +163,12 @@ paths:
     });
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /List pets/i })).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("Search requests…")).toBeInTheDocument();
     });
+
+    expect(screen.getByRole("button", { name: /List pets/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /New request/i })).not.toBeInTheDocument();
 
     expect(
       screen.queryByRole("heading", { name: /Add your API specification/i })

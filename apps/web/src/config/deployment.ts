@@ -126,3 +126,16 @@ export function showWorkspaceManagement(): boolean {
 export function showImportSpec(): boolean {
   return isFullAppSurface() && !isSdkEmbeddedContext();
 }
+
+/** Show try-out panel (params, headers, body, send). Enabled on full app and SDK embed loads. */
+export function showTryOutPanel(): boolean {
+  if (isFullAppSurface()) {
+    return true;
+  }
+  return Boolean(getSpecoraEmbedConfig()?.specUrl);
+}
+
+/** Environment chip in header — useful when try-out is available. */
+export function showEnvironmentInHeader(): boolean {
+  return isFullAppSurface() || Boolean(getSpecoraEmbedConfig()?.specUrl);
+}

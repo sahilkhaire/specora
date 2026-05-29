@@ -621,10 +621,19 @@ export function ApiClientWorkbench({
     onWorkbenchHeaderChange({
       historyOpen,
       onToggleHistory: toggleHistoryPanel,
+      schemaPanelOpen,
+      onToggleSchemaPanel: toggleSchemaPanel,
       onExportPostman: handleExportPostman
     });
     return () => onWorkbenchHeaderChange(null);
-  }, [handleExportPostman, historyOpen, onWorkbenchHeaderChange, toggleHistoryPanel]);
+  }, [
+    handleExportPostman,
+    historyOpen,
+    onWorkbenchHeaderChange,
+    schemaPanelOpen,
+    toggleHistoryPanel,
+    toggleSchemaPanel
+  ]);
 
   return (
     <>
@@ -642,8 +651,6 @@ export function ApiClientWorkbench({
               toast.success("Created custom request");
             }}
             onImportPostman={() => setPostmanOpen(true)}
-            schemaPanelOpen={schemaPanelOpen}
-            onToggleSchemaPanel={toggleSchemaPanel}
             showCollectionActions={!embedded}
           />
         }

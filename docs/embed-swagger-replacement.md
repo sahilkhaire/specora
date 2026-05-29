@@ -51,13 +51,12 @@ See [packages/sdk-go/README.md](../packages/sdk-go/README.md) for framework exam
 
 ## Embed UX (read-only)
 
-When Specora is mounted via an SDK, the UI is **read-only** for workspace and collection management:
+Try-out (params, headers, body, auth, send) is **enabled** in SDK embed when a spec is loaded from `specUrl`. Use the settings menu for proxy/CORS options, or run `npx specora proxy --port 8787` locally.
+
+Read-only in SDK embed (no full API client workbench):
 
 - No workspace switcher or create-workspace controls
 - No Import OpenAPI spec, New request, or Import Postman actions
-- HTTP method is fixed per OpenAPI operation (not editable)
-
-Try-out (params, headers, body, send) and environment variables still work for testing against your API.
 
 ## Download canonical spec files
 

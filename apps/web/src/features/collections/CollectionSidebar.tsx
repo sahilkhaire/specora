@@ -4,7 +4,7 @@ import type { CollectionNode, SavedRequest } from "./collection-types";
 import { Input } from "@/shared/ui/Input";
 import { Button } from "@/shared/ui/Button";
 import { EmptyState } from "@/shared/ui/EmptyState";
-import { IconPanelRight, IconPlus, IconUpload } from "@/shared/ui/icons";
+import { IconPlus, IconUpload } from "@/shared/ui/icons";
 
 export interface FlatTreeRow {
   id: string;
@@ -92,8 +92,6 @@ interface CollectionSidebarProps {
   onSelectRequest: (requestId: string) => void;
   onNewRequest: () => void;
   onImportPostman: () => void;
-  schemaPanelOpen?: boolean;
-  onToggleSchemaPanel?: () => void;
   showCollectionActions?: boolean;
 }
 
@@ -104,8 +102,6 @@ export function CollectionSidebar({
   onSelectRequest,
   onNewRequest,
   onImportPostman,
-  schemaPanelOpen = false,
-  onToggleSchemaPanel,
   showCollectionActions = true
 }: CollectionSidebarProps) {
   const [filter, setFilter] = useState("");
@@ -231,18 +227,6 @@ export function CollectionSidebar({
                 <IconUpload size={15} />
               </button>
             </>
-          ) : null}
-          {onToggleSchemaPanel ? (
-            <button
-              type="button"
-              className={`collection-sidebar-panel-toggle${schemaPanelOpen ? " collection-sidebar-panel-toggle--active" : ""}`}
-              onClick={onToggleSchemaPanel}
-              aria-label={schemaPanelOpen ? "Hide schema panel" : "Show schema panel"}
-              aria-pressed={schemaPanelOpen}
-              title={schemaPanelOpen ? "Hide schema panel" : "Show schema panel"}
-            >
-              <IconPanelRight size={16} />
-            </button>
           ) : null}
         </div>
       </div>

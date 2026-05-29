@@ -19,7 +19,8 @@ import {
   isEmbedSurface,
   isFullAppSurface,
   isSdkEmbeddedContext,
-  showImportSpec as canImportSpec
+  showImportSpec as canImportSpec,
+  showTryOutPanel,
 } from "@/config/deployment";
 import {
   applyVariables,
@@ -155,7 +156,7 @@ export function App() {
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
   const [showSettings, setShowSettings] = useState(false);
   const [workbenchHeader, setWorkbenchHeader] = useState<WorkbenchHeaderConfig | null>(null);
-  const showTryOut = !isEmbedSurface();
+  const showTryOut = showTryOutPanel();
   const allowImportSpec = canImportSpec();
   const embedConfig = getSpecoraEmbedConfig();
   const sdkDownloadUrls = embedConfig?.specUrl
@@ -672,7 +673,8 @@ export function App() {
     }
   }
 
-  const useApiClient = Boolean(spec && showTryOut && isFullAppSurface());
+  const useApiClient = Boolean(spec && showTryOut);
+  const embedSpecLoading = Boolean(embedConfig?.specUrl && !spec && !error);
 
   const openSpecLoader = useCallback(() => {
     setShowSpecLoader(true);
@@ -721,6 +723,8 @@ export function App() {
               onProxyUrlChange={setProxyUrl}
               activeEnv={activeEnv}
             />
+          ) : embedSpecLoading ? (
+            <p className="empty-message">Loading API specification…</p>
           ) : (
           <div className="dashboard-layout">
             <section className="left-pane">

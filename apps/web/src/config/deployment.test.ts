@@ -3,6 +3,7 @@ import {
   getSpecoraEmbedConfig,
   isSdkEmbeddedContext,
   showImportSpec,
+  showTryOutPanel,
   showWorkspaceManagement,
 } from "./deployment";
 
@@ -31,5 +32,11 @@ describe("deployment embed helpers", () => {
   it("shows workspace management on hosted full surface", () => {
     expect(showWorkspaceManagement()).toBe(true);
     expect(showImportSpec()).toBe(true);
+    expect(showTryOutPanel()).toBe(true);
+  });
+
+  it("enables try-out panel when SDK injects specUrl", () => {
+    window.__SPECORA_EMBED__ = { specUrl: "/api-docs/openapi.json" };
+    expect(showTryOutPanel()).toBe(true);
   });
 });

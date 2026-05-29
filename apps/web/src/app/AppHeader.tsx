@@ -1,10 +1,11 @@
-import { isFullAppSurface, showWorkspaceManagement } from "@/config/deployment";
+import { isFullAppSurface, showEnvironmentInHeader, showWorkspaceManagement } from "@/config/deployment";
 import { HeaderSettingsMenu } from "@/app/HeaderSettingsMenu";
 import type { ThemeMode, WorkbenchHeaderConfig } from "@/app/header-types";
 import { WorkspaceSelector } from "@/features/workspaces/WorkspaceSelector";
 import type { Workspace } from "@/features/workspaces/workspace-types";
 import { Badge } from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
+import { IconPanelRight } from "@/shared/ui/icons";
 
 interface AppHeaderProps {
   apiTitle: string;
@@ -52,7 +53,7 @@ export function AppHeader({
   showExportPostman = true
 }: AppHeaderProps) {
   const showWorkspace = showWorkspaceManagement();
-  const showEnvironment = isFullAppSurface();
+  const showEnvironment = showEnvironmentInHeader();
   const compact = Boolean(workbench);
 
   return (
@@ -124,6 +125,18 @@ export function AppHeader({
       ) : null}
 
       <nav className="app-top-header-toolbar" aria-label="Header actions">
+        {workbench ? (
+          <button
+            type="button"
+            className={`app-top-header-icon-btn${workbench.schemaPanelOpen ? " app-top-header-icon-btn--active" : ""}`}
+            onClick={workbench.onToggleSchemaPanel}
+            aria-label={workbench.schemaPanelOpen ? "Hide schema panel" : "Show schema panel"}
+            aria-pressed={workbench.schemaPanelOpen}
+            title={workbench.schemaPanelOpen ? "Hide schema panel" : "Show schema panel"}
+          >
+            <IconPanelRight size={17} />
+          </button>
+        ) : null}
         <HeaderSettingsMenu
           themeMode={themeMode}
           onThemeModeChange={onThemeModeChange}
