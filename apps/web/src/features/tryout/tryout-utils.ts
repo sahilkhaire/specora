@@ -191,8 +191,8 @@ export function mapTryoutSendError(error: unknown, useProxy: boolean): string {
 
   if (normalized.includes("cors")) {
     return useProxy
-      ? "CORS blocked the proxy request. Next step: add your app origin to API CORS_ORIGIN."
-      : "CORS blocked the request. Next step: enable Proxy in Try Out (uses your Specora server) or enable CORS on the target API.";
+      ? "CORS blocked the proxy request. Next step: confirm the local proxy is running (`npx specora proxy --port 8787`) and the proxy URL is correct."
+      : "CORS blocked the request. Next step: enable CORS on the target API, or enable Proxy and run `npx specora proxy --port 8787` locally.";
   }
 
   if (
@@ -202,9 +202,9 @@ export function mapTryoutSendError(error: unknown, useProxy: boolean): string {
     || normalized.includes("load failed")
   ) {
     if (useProxy) {
-      return "Could not reach the local proxy. Next step: start `specora proxy` and confirm the proxy URL.";
+      return "Could not reach the local proxy. Next step: start `npx specora proxy --port 8787` and confirm the proxy URL.";
     }
-    return "Network request failed (often CORS or connectivity). Next step: check API reachability or enable proxy mode.";
+    return "Network request failed (often CORS or connectivity). Next step: check API reachability or enable local proxy mode (`npx specora proxy --port 8787`).";
   }
 
   if (useProxy && normalized.includes("proxy")) {
@@ -212,4 +212,14 @@ export function mapTryoutSendError(error: unknown, useProxy: boolean): string {
   }
 
   return `Request failed: ${rawMessage}`;
+}
+
+export function prettyResponseBody(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return raw;
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2);
+  } catch {
+    return raw;
+  }
 }

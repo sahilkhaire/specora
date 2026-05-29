@@ -94,13 +94,13 @@ Export with machine-readable JSON output:
 npx specora export ./openapi.yaml --output ./dist/specora-preview.html --format json
 ```
 
-Run local proxy for browser try-out (CORS-safe mode):
+Run local proxy for browser try-out when the target API has no CORS headers:
 
 ```bash
 npx specora proxy --port 8787
 ```
 
-In the web UI Try Out section, enable `Use local proxy mode` and keep the proxy URL as `http://localhost:8787/proxy`.
+In the web UI Try Out section, enable **Proxy** and set the URL to `http://localhost:8787/proxy`. Try-out defaults to direct mode (browser → target API); the local CLI proxy is the only CORS bypass on hosted SaaS — request data never passes through Specora's servers.
 
 ## Workspace Layout
 

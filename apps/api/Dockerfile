@@ -10,6 +10,7 @@ FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8788
+ENV PROXY_ENABLED=false
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/packages/core ./packages/core
 COPY --from=build /app/apps/api/dist ./apps/api/dist

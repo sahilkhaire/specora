@@ -149,7 +149,7 @@ describe("App", () => {
     await waitFor(() => {
       expect(
         screen.getByText(
-          "Network request failed (often CORS or connectivity). Next step: check API reachability or enable proxy mode."
+          "Network request failed (often CORS or connectivity). Next step: check API reachability or enable local proxy mode (`npx specora proxy --port 8787`)."
         )
       ).toBeInTheDocument();
     });

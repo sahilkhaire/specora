@@ -5,11 +5,7 @@ import react from "@vitejs/plugin-react";
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
   optimizeDeps: {
-    include: [
-      "@specora/core",
-      "@specora/import-postman",
-      "postman-collection-transformer"
-    ]
+    include: ["@specora/core", "@radix-ui/react-dropdown-menu"]
   },
   resolve: {
     alias: {
@@ -17,7 +13,7 @@ export default defineConfig(({ mode }) => ({
     }
   },
   ssr: {
-    noExternal: ["@specora/core", "@specora/import-postman"]
+    noExternal: ["@specora/core"]
   },
   build: {
     outDir: mode === "embed" ? "dist-embed" : "dist",

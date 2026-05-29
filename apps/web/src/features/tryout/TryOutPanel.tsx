@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import type { OperationItem } from "@/features/spec/spec-utils";
 import type { Environment } from "@/features/environments/env-types";
+import type { SavedExchange } from "@/features/collections/collection-types";
+import { SavedExchangesPanel } from "@/features/collections/SavedExchangesPanel";
 import {
   applyVariables,
   buildAuthHeaders,
@@ -13,9 +15,12 @@ import {
   type AuthType,
 } from "./tryout-utils";
 
-type TryoutTab = "params" | "headers" | "body" | "auth" | "curl";
+type TryoutTab = "params" | "headers" | "body" | "auth" | "curl" | "saved";
 
 interface TryOutPanelProps {
+  variant?: "standalone" | "embedded";
+  /** When set (e.g. workbench), overrides operation method for send/display. */
+  requestMethod?: string;
   selectedOperation: OperationItem | null;
   serverUrl: string;
   onServerUrlChange: (value: string) => void;
@@ -48,9 +53,15 @@ interface TryOutPanelProps {
   onFillEmptyBody?: () => void;
   onFillExampleBody?: () => void;
   hasBodySchema?: boolean;
+  savedExchanges?: SavedExchange[];
+  onSaveExchange?: () => void;
+  onLoadExchange?: (exchange: SavedExchange) => void;
+  onDeleteExchange?: (id: string) => void;
 }
 
 export function TryOutPanel({
+  variant = "standalone",
+  requestMethod,
   selectedOperation,
   serverUrl,
   onServerUrlChange,
@@ -83,12 +94,16 @@ export function TryOutPanel({
   onFillEmptyBody,
   onFillExampleBody,
   hasBodySchema = false,
+  savedExchanges = [],
+  onSaveExchange,
+  onLoadExchange,
+  onDeleteExchange,
 }: TryOutPanelProps) {
   const [tab, setTab] = useState<TryoutTab>("params");
   const [copied, setCopied] = useState<"curl" | "response" | null>(null);
 
   const vars = activeEnv?.variables ?? {};
-  const method = selectedOperation?.method ?? "GET";
+  const method = requestMethod ?? selectedOperation?.method ?? "GET";
   const canSendBody = !["GET", "HEAD"].includes(method);
 
   const previewUrl = useMemo(() => {
@@ -154,62 +169,104 @@ export function TryOutPanel({
   }
 
   const hasResponse = Boolean(requestStatus || requestResponse || requestError);
+  const embedded = variant === "embedded";
+  const visibleTabs: TryoutTab[] = embedded
+    ? ["params", "headers", "body", "auth", ...(savedExchanges.length > 0 ? (["saved"] as TryoutTab[]) : [])]
+    : ["params", "headers", "body", "auth", "curl", "saved"];
+
+  function responseBodyContent(): { text: string; placeholder: boolean } {
+    if (isSending) {
+      return { text: "Waiting for response…", placeholder: true };
+    }
+    if (requestResponse.trim()) {
+      return { text: requestResponse, placeholder: false };
+    }
+    if (!requestStatus) {
+      return { text: "Send a request to see the response here.", placeholder: true };
+    }
+    if (method.toUpperCase() === "HEAD") {
+      return {
+        text: "HEAD requests do not include a body. Check response headers above.",
+        placeholder: true
+      };
+    }
+    if (Object.keys(requestHeaders).length > 0) {
+      return { text: "No response body. Check headers above.", placeholder: true };
+    }
+    return { text: "Empty response body.", placeholder: true };
+  }
+
+  const responseDisplay = responseBodyContent();
+  const showHeadersOpen = Boolean(
+    requestStatus && !requestResponse.trim() && Object.keys(requestHeaders).length > 0
+  );
 
   return (
-    <article className="detail-card tryout-panel">
-      <div className="tryout-panel-head">
-        <div>
-          <h2>Try it out</h2>
-          <p className="tryout-panel-sub">Send a live request like Postman or cURL</p>
-        </div>
-        <label className="tryout-proxy-toggle">
-          <input
-            type="checkbox"
-            checked={useProxy}
-            onChange={(event) => onUseProxyChange(event.target.checked)}
-          />
-          <span>Proxy</span>
-        </label>
-      </div>
+    <article className={`detail-card tryout-panel${embedded ? " tryout-panel--embedded" : ""}`}>
+      {!embedded ? (
+        <>
+          <div className="tryout-panel-head">
+            <div>
+              <h2>Try it out</h2>
+              <p className="tryout-panel-sub">Send a live request like Postman or cURL</p>
+            </div>
+            <label className="tryout-proxy-toggle">
+              <input
+                type="checkbox"
+                checked={useProxy}
+                onChange={(event) => onUseProxyChange(event.target.checked)}
+              />
+              <span>Proxy</span>
+            </label>
+          </div>
 
-      <div className="tryout-request-bar">
-        <span className={methodBadgeClass(method)}>{method}</span>
-        <input
-          className="tryout-url-input"
-          value={serverUrl}
-          onChange={(event) => onServerUrlChange(event.target.value)}
-          placeholder="https://api.example.com"
-          aria-label="Server base URL"
-        />
-        <button
-          type="button"
-          className={`tryout-send-btn tryout-send-btn--${method.toLowerCase()}`}
-          onClick={onSend}
-          disabled={!selectedOperation || isSending}
-        >
-          {isSending ? "Sending…" : "Send"}
-        </button>
-      </div>
+          <div className="tryout-request-bar">
+            <span className={methodBadgeClass(method)}>{method}</span>
+            <input
+              className="tryout-url-input"
+              value={serverUrl}
+              onChange={(event) => onServerUrlChange(event.target.value)}
+              placeholder="https://api.example.com"
+              aria-label="Server base URL"
+            />
+            <button
+              type="button"
+              className={`tryout-send-btn tryout-send-btn--${method.toLowerCase()}`}
+              onClick={onSend}
+              disabled={!selectedOperation || isSending}
+            >
+              {isSending ? "Sending…" : "Send"}
+            </button>
+          </div>
 
-      {previewUrl ? (
-        <div className="tryout-preview-url" title={previewUrl}>
-          <span className="tryout-preview-label">Request</span>
-          <code>{previewUrl}</code>
-        </div>
+          {previewUrl ? (
+            <div className="tryout-preview-url" title={previewUrl}>
+              <span className="tryout-preview-label">Request</span>
+              <code>{previewUrl}</code>
+            </div>
+          ) : null}
+
+          {useProxy ? (
+            <div className="tryout-inline-field">
+              <label>
+                <span>Proxy URL</span>
+                <input
+                  value={proxyUrl}
+                  onChange={(event) => onProxyUrlChange(event.target.value)}
+                  placeholder="http://localhost:8787/proxy"
+                />
+              </label>
+              <p className="tryout-env-hint">
+                Run <code>npx specora proxy --port 8787</code> locally. Requests stay on your machine.
+              </p>
+            </div>
+          ) : null}
+        </>
       ) : null}
 
-      {useProxy ? (
-        <label className="tryout-inline-field">
-          <span>Proxy URL</span>
-          <input
-            value={proxyUrl}
-            onChange={(event) => onProxyUrlChange(event.target.value)}
-            placeholder="http://localhost:8787/proxy"
-          />
-        </label>
-      ) : null}
-
-      <div className="tryout-tabs" role="tablist" aria-label="Request parts">
+      <div className="tryout-tabs-row">
+        <div className="tryout-tabs" role="tablist" aria-label="Request parts">
+        {visibleTabs.includes("params") ? (
         <button
           type="button"
           role="tab"
@@ -219,6 +276,8 @@ export function TryOutPanel({
         >
           Params
         </button>
+        ) : null}
+        {visibleTabs.includes("headers") ? (
         <button
           type="button"
           role="tab"
@@ -228,6 +287,8 @@ export function TryOutPanel({
         >
           Headers
         </button>
+        ) : null}
+        {visibleTabs.includes("body") ? (
         <button
           type="button"
           role="tab"
@@ -238,6 +299,8 @@ export function TryOutPanel({
         >
           Body
         </button>
+        ) : null}
+        {visibleTabs.includes("auth") ? (
         <button
           type="button"
           role="tab"
@@ -247,6 +310,8 @@ export function TryOutPanel({
         >
           Auth
         </button>
+        ) : null}
+        {visibleTabs.includes("curl") ? (
         <button
           type="button"
           role="tab"
@@ -256,7 +321,41 @@ export function TryOutPanel({
         >
           cURL
         </button>
+        ) : null}
+        {visibleTabs.includes("saved") ? (
+        <button
+          type="button"
+          role="tab"
+          className={tab === "saved" ? "active" : ""}
+          aria-selected={tab === "saved"}
+          onClick={() => setTab("saved")}
+        >
+          Saved{savedExchanges.length > 0 ? ` (${savedExchanges.length})` : ""}
+        </button>
+        ) : null}
+        </div>
+
+        {embedded ? (
+          <label className="tryout-proxy-toggle tryout-proxy-toggle--inline">
+            <input
+              type="checkbox"
+              checked={useProxy}
+              onChange={(event) => onUseProxyChange(event.target.checked)}
+            />
+            <span>Proxy</span>
+          </label>
+        ) : null}
       </div>
+
+      {embedded && useProxy ? (
+        <input
+          className="tryout-proxy-inline-input"
+          value={proxyUrl}
+          onChange={(event) => onProxyUrlChange(event.target.value)}
+          placeholder="http://localhost:8787/proxy"
+          aria-label="Proxy URL"
+        />
+      ) : null}
 
       <div className="tryout-tab-panel">
           {tab === "curl" ? (
@@ -392,6 +491,14 @@ export function TryOutPanel({
               ) : null}
             </div>
           ) : null}
+
+          {tab === "saved" ? (
+            <SavedExchangesPanel
+              exchanges={savedExchanges}
+              onLoad={(exchange) => onLoadExchange?.(exchange)}
+              onDelete={(id) => onDeleteExchange?.(id)}
+            />
+          ) : null}
       </div>
 
       {requestError ? <p className="tryout-error">{requestError}</p> : null}
@@ -409,19 +516,26 @@ export function TryOutPanel({
               <span className="tryout-timing">{requestTiming} ms</span>
             ) : null}
             {requestResponse ? (
-              <button
-                type="button"
-                className="tryout-ghost-btn"
-                onClick={() => void copyText(requestResponse, "response")}
-              >
-                {copied === "response" ? "Copied" : "Copy body"}
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="tryout-ghost-btn"
+                  onClick={() => void copyText(requestResponse, "response")}
+                >
+                  {copied === "response" ? "Copied" : "Copy body"}
+                </button>
+                {onSaveExchange ? (
+                  <button type="button" className="tryout-ghost-btn" onClick={onSaveExchange}>
+                    Save
+                  </button>
+                ) : null}
+              </>
             ) : null}
           </div>
         </div>
 
         {Object.keys(requestHeaders).length > 0 ? (
-          <details className="tryout-response-headers">
+          <details className="tryout-response-headers" open={showHeadersOpen}>
             <summary>Headers ({Object.keys(requestHeaders).length})</summary>
             <div className="tryout-headers-table-wrap">
               <table>
@@ -438,8 +552,10 @@ export function TryOutPanel({
           </details>
         ) : null}
 
-        <pre className="tryout-response-body">
-          {requestResponse || (isSending ? "Waiting for response…" : "Send a request to see the response here.")}
+        <pre
+          className={`tryout-response-body${responseDisplay.placeholder ? " tryout-response-body--placeholder" : ""}`}
+        >
+          {responseDisplay.text}
         </pre>
       </div>
     </article>

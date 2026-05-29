@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./export": {
+      "types": "./dist/export-collection.d.ts",
+      "import": "./dist/export-collection.js"
     }
   },
   "scripts": {
@@ -15,9 +19,7 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/*.test.ts"
   },
-  "dependencies": {
-    "postman-collection-transformer": "^4.1.8"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.10.2",
     "tsx": "^4.19.2"

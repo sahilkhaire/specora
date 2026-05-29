@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Toaster, toast } from "sonner";
-import { exportPostmanCollectionV21 } from "@specora/import-postman";
+import { exportPostmanCollectionV21 } from "@specora/import-postman/export";
 import {
   findOperationByKey,
   getUsedSchemaDetailsForOperation,
@@ -13,7 +13,7 @@ import {
 } from "@/features/schemas/operation-payloads";
 import { sampleToJson } from "@/features/schemas/schema-samples";
 import { TryOutPanel } from "@/features/tryout/TryOutPanel";
-import { scaffoldFromParameters, parseRecordJson } from "@/features/tryout/tryout-utils";
+import { scaffoldFromParameters, parseRecordJson, methodBadgeClass, prettyResponseBody } from "@/features/tryout/tryout-utils";
 import type { AuthType } from "@/features/tryout/tryout-utils";
 import type { Environment } from "@/features/environments/env-types";
 import { AppShell } from "./AppShell";
@@ -22,17 +22,22 @@ import { PostmanImportDialog } from "@/features/collections/PostmanImportDialog"
 import { RequestHistoryPanel } from "@/features/collections/RequestHistoryPanel";
 import { useCollections } from "@/features/collections/use-collections";
 import { createCustomRequest } from "@/features/collections/collection-bootstrap";
-import { parseCurlToRequest } from "@/features/collections/parse-curl";
-import type { RequestHistoryEntry, SavedRequest } from "@/features/collections/collection-types";
+import type { RequestHistoryEntry, SavedExchange, SavedRequest } from "@/features/collections/collection-types";
+import {
+  readHistoryPanelOpen,
+  readSchemaPanelOpen,
+  writeHistoryPanelOpen,
+  writeSchemaPanelOpen
+} from "@/features/collections/panel-prefs";
+import type { WorkbenchHeaderConfig } from "@/app/header-types";
 import { executeRequest } from "@/features/http/execute-request";
-import { Button } from "@/shared/ui/Button";
 import { useDataContext } from "@/data/DataProvider";
 
 interface ApiClientWorkbenchProps {
   workspaceId: string;
   spec: Record<string, unknown>;
   operations: OperationItem[];
-  onHeaderActionsChange?: (actions: React.ReactNode) => void;
+  onWorkbenchHeaderChange?: (config: WorkbenchHeaderConfig | null) => void;
   serverUrl: string;
   onServerUrlChange: (value: string) => void;
   useProxy: boolean;
@@ -46,7 +51,7 @@ export function ApiClientWorkbench({
   workspaceId,
   spec,
   operations,
-  onHeaderActionsChange,
+  onWorkbenchHeaderChange,
   serverUrl,
   onServerUrlChange,
   useProxy,
@@ -63,7 +68,10 @@ export function ApiClientWorkbench({
     selectedRequest,
     updateRequest,
     addCustomRequest,
-    importFromPostman
+    importFromPostman,
+    addExchange,
+    removeExchange,
+    exchangesForSelected
   } = useCollections(workspaceId, spec);
 
   const [pathParamsInput, setPathParamsInput] = useState("{}");
@@ -80,9 +88,9 @@ export function ApiClientWorkbench({
   const [requestError, setRequestError] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [postmanOpen, setPostmanOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(readHistoryPanelOpen);
+  const [schemaPanelOpen, setSchemaPanelOpen] = useState(readSchemaPanelOpen);
   const [history, setHistory] = useState<RequestHistoryEntry[]>([]);
-  const [curlInput, setCurlInput] = useState("");
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -104,6 +112,11 @@ export function ApiClientWorkbench({
     setAuthType(selectedRequest.authType ?? "none");
     setAuthValue(selectedRequest.authValue ?? "");
     setAuthKeyName(selectedRequest.authKeyName ?? "X-API-Key");
+    setRequestStatus("");
+    setRequestResponse("");
+    setRequestHeaders({});
+    setRequestTiming(null);
+    setRequestError("");
 
     if (linkedOperation && Object.keys(selectedRequest.pathParams).length === 0) {
       const scaffold = scaffoldFromParameters(linkedOperation.parameters);
@@ -147,11 +160,18 @@ export function ApiClientWorkbench({
       pathParams: parseRecordJson(pathParamsInput),
       queryParams: parseRecordJson(queryParamsInput),
       headers: parseRecordJson(headersInput),
-      body: requestBody ? { mode: "json", content: requestBody } : { mode: "none", content: "" }
+      body: requestBody.trim()
+        ? { mode: "json", content: requestBody }
+        : { mode: "none", content: "" },
+      authType,
+      authValue,
+      authKeyName
     };
 
     setIsSending(true);
     setRequestError("");
+    setRequestStatus("");
+    setRequestResponse("");
     const result = await executeRequest({
       request: draft,
       serverUrl,
@@ -171,7 +191,7 @@ export function ApiClientWorkbench({
     setRequestStatus(String(result.status ?? ""));
     setRequestTiming(result.durationMs);
     setRequestHeaders(result.responseHeaders);
-    setRequestResponse(result.responseBody);
+    setRequestResponse(prettyResponseBody(result.responseBody));
     toast.success(`Response ${result.status} in ${result.durationMs}ms`);
 
     const entry: RequestHistoryEntry = {
@@ -190,6 +210,9 @@ export function ApiClientWorkbench({
     void stores.history.save(workspaceId, nextHistory);
   }, [
     activeEnv,
+    authKeyName,
+    authType,
+    authValue,
     history,
     pathParamsInput,
     persistDraft,
@@ -203,6 +226,121 @@ export function ApiClientWorkbench({
     useProxy,
     workspaceId
   ]);
+
+  const handleSaveExchange = useCallback(() => {
+    if (!selectedRequest || !requestResponse.trim()) return;
+
+    const defaultName = `${requestStatus || "Response"} · ${new Date().toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    })}`;
+    const label = window.prompt("Name this saved request-response (optional):", defaultName);
+    if (label === null) return;
+
+    const exchange: SavedExchange = {
+      id: `ex_${crypto.randomUUID().slice(0, 8)}`,
+      savedRequestId: selectedRequest.id,
+      name: label.trim() || defaultName,
+      requestSnapshot: {
+        method: selectedRequest.method,
+        url: selectedRequest.url,
+        pathParams: parseRecordJson(pathParamsInput),
+        queryParams: parseRecordJson(queryParamsInput),
+        headers: parseRecordJson(headersInput),
+        body: requestBody
+          ? { mode: "json", content: requestBody }
+          : { mode: "none", content: "" },
+        authType,
+        authValue,
+        authKeyName
+      },
+      response: {
+        status: requestStatus ? Number(requestStatus) : undefined,
+        durationMs: requestTiming ?? 0,
+        headers: requestHeaders,
+        body: requestResponse
+      },
+      createdAt: new Date().toISOString()
+    };
+
+    addExchange(exchange);
+    toast.success("Saved request and response");
+  }, [
+    addExchange,
+    authKeyName,
+    authType,
+    authValue,
+    headersInput,
+    pathParamsInput,
+    queryParamsInput,
+    requestBody,
+    requestHeaders,
+    requestResponse,
+    requestStatus,
+    requestTiming,
+    selectedRequest
+  ]);
+
+  const handleLoadExchange = useCallback(
+    (exchange: SavedExchange) => {
+      const snap = exchange.requestSnapshot;
+      setPathParamsInput(JSON.stringify(snap.pathParams, null, 2));
+      setQueryParamsInput(JSON.stringify(snap.queryParams, null, 2));
+      setHeadersInput(JSON.stringify(snap.headers, null, 2));
+      setRequestBody(snap.body.content);
+      setAuthType(snap.authType ?? "none");
+      setAuthValue(snap.authValue ?? "");
+      setAuthKeyName(snap.authKeyName ?? "X-API-Key");
+      setRequestStatus(String(exchange.response.status ?? ""));
+      setRequestTiming(exchange.response.durationMs);
+      setRequestHeaders(exchange.response.headers);
+      setRequestResponse(exchange.response.body);
+      setRequestError("");
+
+      if (selectedRequest) {
+        updateRequest(selectedRequest.id, {
+          method: snap.method,
+          url: snap.url,
+          pathParams: snap.pathParams,
+          queryParams: snap.queryParams,
+          headers: snap.headers,
+          body: snap.body,
+          authType: snap.authType,
+          authValue: snap.authValue,
+          authKeyName: snap.authKeyName
+        });
+      }
+
+      toast.success("Loaded saved request and response");
+    },
+    [selectedRequest, updateRequest]
+  );
+
+  const handleDeleteExchange = useCallback(
+    (id: string) => {
+      removeExchange(id);
+      toast.success("Deleted saved exchange");
+    },
+    [removeExchange]
+  );
+
+  const toggleHistoryPanel = useCallback(() => {
+    setHistoryOpen((open) => {
+      const next = !open;
+      writeHistoryPanelOpen(next);
+      return next;
+    });
+  }, []);
+
+  const toggleSchemaPanel = useCallback(() => {
+    setSchemaPanelOpen((open) => {
+      const next = !open;
+      writeSchemaPanelOpen(next);
+      return next;
+    });
+  }, []);
 
   const insightOperation: OperationItem | null = useMemo(() => {
     if (linkedOperation) return linkedOperation;
@@ -285,19 +423,14 @@ export function ApiClientWorkbench({
   }, [collectionState.nodes, collectionState.requests, spec]);
 
   useEffect(() => {
-    if (!onHeaderActionsChange) return;
-    onHeaderActionsChange(
-      <>
-        <Button variant="ghost" onClick={() => setHistoryOpen((v) => !v)}>
-          History
-        </Button>
-        <Button variant="ghost" onClick={handleExportPostman}>
-          Export Postman
-        </Button>
-      </>
-    );
-    return () => onHeaderActionsChange(null);
-  }, [handleExportPostman, historyOpen, onHeaderActionsChange]);
+    if (!onWorkbenchHeaderChange) return;
+    onWorkbenchHeaderChange({
+      historyOpen,
+      onToggleHistory: toggleHistoryPanel,
+      onExportPostman: handleExportPostman
+    });
+    return () => onWorkbenchHeaderChange(null);
+  }, [handleExportPostman, historyOpen, onWorkbenchHeaderChange, toggleHistoryPanel]);
 
   return (
     <>
@@ -315,6 +448,8 @@ export function ApiClientWorkbench({
               toast.success("Created custom request");
             }}
             onImportPostman={() => setPostmanOpen(true)}
+            schemaPanelOpen={schemaPanelOpen}
+            onToggleSchemaPanel={toggleSchemaPanel}
           />
         }
         main={
@@ -323,7 +458,7 @@ export function ApiClientWorkbench({
               <>
                 <div className="request-command-bar">
                   <select
-                    className="request-method-select"
+                    className={`request-method-select ${methodBadgeClass(selectedRequest.method)}`}
                     value={selectedRequest.method}
                     onChange={(e) =>
                       updateRequest(selectedRequest.id, { method: e.target.value })
@@ -341,12 +476,20 @@ export function ApiClientWorkbench({
                     value={selectedRequest.url}
                     onChange={(e) => updateRequest(selectedRequest.id, { url: e.target.value })}
                     placeholder="https://api.example.com/path"
+                    aria-label="Request URL"
                   />
-                  <Button onClick={() => void sendRequest()} disabled={isSending}>
+                  <button
+                    type="button"
+                    className={`request-send-btn request-send-btn--${selectedRequest.method.toLowerCase()}`}
+                    onClick={() => void sendRequest()}
+                    disabled={isSending}
+                  >
                     {isSending ? "Sending…" : "Send"}
-                  </Button>
+                  </button>
                 </div>
                 <TryOutPanel
+                  variant="embedded"
+                  requestMethod={selectedRequest.method}
                   selectedOperation={linkedOperation}
                   serverUrl={serverUrl}
                   onServerUrlChange={onServerUrlChange}
@@ -405,35 +548,11 @@ export function ApiClientWorkbench({
                         }
                       : undefined
                   }
+                  savedExchanges={exchangesForSelected}
+                  onSaveExchange={handleSaveExchange}
+                  onLoadExchange={handleLoadExchange}
+                  onDeleteExchange={handleDeleteExchange}
                 />
-                <details className="curl-import-details">
-                  <summary>Import from cURL</summary>
-                  <textarea
-                    value={curlInput}
-                    onChange={(e) => setCurlInput(e.target.value)}
-                    placeholder="curl -X GET https://api.example.com/..."
-                    rows={3}
-                  />
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      const parsed = parseCurlToRequest(curlInput);
-                      if (!parsed || !selectedRequest) {
-                        toast.error("Could not parse cURL command");
-                        return;
-                      }
-                      updateRequest(selectedRequest.id, {
-                        method: parsed.method,
-                        url: parsed.url,
-                        headers: parsed.headers,
-                        body: parsed.body
-                      });
-                      toast.success("Applied cURL to request");
-                    }}
-                  >
-                    Apply cURL
-                  </Button>
-                </details>
               </>
             ) : (
               <p className="empty-message">Select a request from the collection.</p>
@@ -441,30 +560,39 @@ export function ApiClientWorkbench({
           </div>
         }
         docs={
-          insightOperation ? (
-            <OperationInsightPanel
-              spec={spec}
-              operation={insightOperation}
-              usedSchemas={usedSchemaDetails}
-              onApplyRequestBody={(json) => {
-                setRequestBody(json);
-                if (selectedRequest) {
-                  updateRequest(selectedRequest.id, { body: { mode: "json", content: json } });
-                  toast.success("Request body updated from schema");
-                }
-              }}
-            />
-          ) : (
-            <div className="operation-insight-panel operation-insight-panel--empty">
-              <p className="empty-message">Select a request to view schema reference and payload templates.</p>
-            </div>
-          )
+          schemaPanelOpen
+            ? insightOperation
+              ? (
+                  <OperationInsightPanel
+                    spec={spec}
+                    operation={insightOperation}
+                    usedSchemas={usedSchemaDetails}
+                    onApplyRequestBody={(json) => {
+                      setRequestBody(json);
+                      if (selectedRequest) {
+                        updateRequest(selectedRequest.id, { body: { mode: "json", content: json } });
+                        toast.success("Request body updated from schema");
+                      }
+                    }}
+                  />
+                )
+              : (
+                  <div className="operation-insight-panel operation-insight-panel--empty">
+                    <p className="empty-message">
+                      Select a request to view schema reference and payload templates.
+                    </p>
+                  </div>
+                )
+            : undefined
         }
         history={
           historyOpen ? (
             <RequestHistoryPanel
               entries={history}
-              onClose={() => setHistoryOpen(false)}
+              onClose={() => {
+                setHistoryOpen(false);
+                writeHistoryPanelOpen(false);
+              }}
               onReplay={(entry) => {
                 if (entry.savedRequestId) {
                   setSelectedRequestId(entry.savedRequestId);

@@ -4,6 +4,7 @@ import type { CollectionNode, SavedRequest } from "./collection-types";
 import { Input } from "@/shared/ui/Input";
 import { Button } from "@/shared/ui/Button";
 import { EmptyState } from "@/shared/ui/EmptyState";
+import { IconPanelRight, IconPlus, IconUpload } from "@/shared/ui/icons";
 
 export interface FlatTreeRow {
   id: string;
@@ -91,6 +92,8 @@ interface CollectionSidebarProps {
   onSelectRequest: (requestId: string) => void;
   onNewRequest: () => void;
   onImportPostman: () => void;
+  schemaPanelOpen?: boolean;
+  onToggleSchemaPanel?: () => void;
 }
 
 export function CollectionSidebar({
@@ -99,7 +102,9 @@ export function CollectionSidebar({
   selectedRequestId,
   onSelectRequest,
   onNewRequest,
-  onImportPostman
+  onImportPostman,
+  schemaPanelOpen = false,
+  onToggleSchemaPanel
 }: CollectionSidebarProps) {
   const [filter, setFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -197,12 +202,36 @@ export function CollectionSidebar({
           aria-label="Search collection"
         />
         <div className="collection-sidebar-actions">
-          <Button variant="ghost" onClick={onNewRequest}>
-            + Request
-          </Button>
-          <Button variant="ghost" onClick={onImportPostman}>
-            Import
-          </Button>
+          <button
+            type="button"
+            className="collection-sidebar-icon-btn"
+            onClick={onNewRequest}
+            title="New request"
+            aria-label="New request"
+          >
+            <IconPlus size={15} />
+          </button>
+          <button
+            type="button"
+            className="collection-sidebar-icon-btn"
+            onClick={onImportPostman}
+            title="Import Postman"
+            aria-label="Import Postman"
+          >
+            <IconUpload size={15} />
+          </button>
+          {onToggleSchemaPanel ? (
+            <button
+              type="button"
+              className={`collection-sidebar-panel-toggle${schemaPanelOpen ? " collection-sidebar-panel-toggle--active" : ""}`}
+              onClick={onToggleSchemaPanel}
+              aria-label={schemaPanelOpen ? "Hide schema panel" : "Show schema panel"}
+              aria-pressed={schemaPanelOpen}
+              title={schemaPanelOpen ? "Hide schema panel" : "Show schema panel"}
+            >
+              <IconPanelRight size={16} />
+            </button>
+          ) : null}
         </div>
       </div>
       <div ref={parentRef} className="collection-sidebar-list" role="tree">

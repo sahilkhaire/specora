@@ -6,14 +6,7 @@ import type {
   PostmanCollectionFormat
 } from "./types.js";
 import { detectPostmanFile } from "./detect-format.js";
-
-type TransformerModule = {
-  convert: (
-    input: Record<string, unknown>,
-    options: { inputVersion: string; outputVersion: string; retainIds?: boolean },
-    callback: (error: Error | null, converted: Record<string, unknown>) => void
-  ) => void;
-};
+import { convertV1ToV21 } from "./v1-converter.js";
 
 function toBase64(value: string): string {
   if (typeof globalThis.Buffer !== "undefined") {
@@ -162,22 +155,6 @@ function normalizeV21(doc: Record<string, unknown>, format: PostmanCollectionFor
   return { format, name, folders, requests, warnings };
 }
 
-async function convertV1ToV21(doc: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const imported = await import("postman-collection-transformer");
-  const mod = ((imported as { default?: TransformerModule }).default ??
-    imported) as TransformerModule;
-  return new Promise((resolve, reject) => {
-    mod.convert(
-      doc,
-      { inputVersion: "1.0.0", outputVersion: "2.1.0", retainIds: true },
-      (error: Error | null, converted: Record<string, unknown>) => {
-        if (error) reject(error);
-        else resolve(converted);
-      }
-    );
-  });
-}
-
 function upconvertV20Url(doc: Record<string, unknown>): Record<string, unknown> {
   const clone = JSON.parse(JSON.stringify(doc)) as Record<string, unknown>;
 
@@ -212,7 +189,7 @@ export async function importPostmanCollection(raw: unknown): Promise<NormalizedC
   let format = detected.collectionFormat ?? "unknown";
 
   if (format === "v1") {
-    doc = await convertV1ToV21(doc);
+    doc = convertV1ToV21(doc);
     format = "v2.1";
   } else if (format === "v2.0") {
     doc = upconvertV20Url(doc);

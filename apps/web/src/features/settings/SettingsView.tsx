@@ -124,7 +124,7 @@ export function SettingsView({
       <div className="panel-card">
         <h2>Proxy Settings</h2>
         <p className="text-muted">
-          Route try-out requests through your Specora server to avoid browser CORS limits
+          Route try-out requests through a local proxy on your machine to avoid browser CORS limits
         </p>
 
         <div className="setting-item">
@@ -150,7 +150,8 @@ export function SettingsView({
               />
             </label>
             <p className="help-text">
-              Defaults to your API POST /proxy endpoint. Local dev: run `specora proxy` on port 8787.
+              Run <code>npx specora proxy --port 8787</code> locally, then use{" "}
+              <code>http://localhost:8787/proxy</code>.
             </p>
           </div>
         )}
@@ -172,7 +173,7 @@ export function SettingsView({
               <li>Try It Out functionality</li>
               <li>Environment management</li>
               <li>Schema visualization</li>
-              <li>CORS proxy support</li>
+              <li>Local CORS proxy (CLI)</li>
             </ul>
           </dd>
         </dl>

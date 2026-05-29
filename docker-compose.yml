@@ -9,6 +9,8 @@ services:
       PORT: "8788"
       DATABASE_URL: "file:/data/specora.db"
       CORS_ORIGIN: "http://localhost:5173,http://localhost:80"
+      # Self-hosted enterprise only: POST /proxy for try-out CORS bypass (disabled on hosted SaaS API).
+      PROXY_ENABLED: "true"
       SPECORA_ADMIN_PASSWORD: "${SPECORA_ADMIN_PASSWORD:-specora-admin}"
       INSTANCE_BASE_DOMAIN: "${INSTANCE_BASE_DOMAIN:-localhost}"
     volumes:

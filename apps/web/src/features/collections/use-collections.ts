@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDataContext } from "@/data/DataProvider";
 import { bootstrapCollectionFromSpec, computeSpecFingerprint, emptyState } from "./collection-bootstrap";
-import type { CollectionNode, SavedRequest, WorkspaceCollectionState } from "./collection-types";
+import { capExchangesForRequest, migrateCollectionState } from "./collection-migrate";
+import type { CollectionNode, SavedExchange, SavedRequest, WorkspaceCollectionState } from "./collection-types";
 
 export function useCollections(workspaceId: string, spec: Record<string, unknown> | null) {
   const { stores } = useDataContext();
@@ -20,7 +21,11 @@ export function useCollections(workspaceId: string, spec: Record<string, unknown
     void (async () => {
       const data = await stores.collections.load(workspaceId);
       if (cancelled) return;
-      setState(data ?? emptyState());
+      const migrated = migrateCollectionState(data as Parameters<typeof migrateCollectionState>[0]);
+      setState(migrated);
+      if (data && data.version !== 2) {
+        void stores.collections.save(workspaceId, migrated);
+      }
       setLoaded(true);
     })();
 
@@ -95,7 +100,40 @@ export function useCollections(workspaceId: string, spec: Record<string, unknown
     [persist, state]
   );
 
+  const getExchangesForRequest = useCallback(
+    (savedRequestId: string): SavedExchange[] => {
+      return state.exchanges
+        .filter((e) => e.savedRequestId === savedRequestId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    },
+    [state.exchanges]
+  );
+
+  const addExchange = useCallback(
+    (exchange: SavedExchange) => {
+      const withNew = [exchange, ...state.exchanges];
+      const capped = capExchangesForRequest(withNew, exchange.savedRequestId);
+      persist({ ...state, exchanges: capped });
+    },
+    [persist, state]
+  );
+
+  const removeExchange = useCallback(
+    (id: string) => {
+      persist({
+        ...state,
+        exchanges: state.exchanges.filter((e) => e.id !== id)
+      });
+    },
+    [persist, state]
+  );
+
   const selectedRequest = selectedRequestId ? getRequest(selectedRequestId) : undefined;
+
+  const exchangesForSelected = useMemo(
+    () => (selectedRequestId ? getExchangesForRequest(selectedRequestId) : []),
+    [getExchangesForRequest, selectedRequestId]
+  );
 
   useEffect(() => {
     if (!selectedRequestId && state.requests.length > 0) {
@@ -113,6 +151,10 @@ export function useCollections(workspaceId: string, spec: Record<string, unknown
     updateRequest,
     addCustomRequest,
     importFromPostman,
+    getExchangesForRequest,
+    addExchange,
+    removeExchange,
+    exchangesForSelected,
     persist
   };
 }

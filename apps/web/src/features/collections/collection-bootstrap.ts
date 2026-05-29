@@ -12,7 +12,7 @@ export function computeSpecFingerprint(spec: Record<string, unknown>): string {
 }
 
 function emptyState(): WorkspaceCollectionState {
-  return { version: 1, specFingerprint: "", nodes: [], requests: [] };
+  return { version: 2, specFingerprint: "", nodes: [], requests: [], exchanges: [] };
 }
 
 export function bootstrapCollectionFromSpec(
@@ -80,7 +80,7 @@ function buildFresh(
     });
   });
 
-  return { version: 1, specFingerprint: fingerprint, nodes, requests };
+  return { version: 2, specFingerprint: fingerprint, nodes, requests, exchanges: [] };
 }
 
 function mergeSpecIntoCollection(
@@ -144,7 +144,14 @@ function mergeSpecIntoCollection(
     });
   }
 
-  return { ...existing, specFingerprint: fingerprint, nodes, requests };
+  return {
+    ...existing,
+    version: 2,
+    specFingerprint: fingerprint,
+    nodes,
+    requests,
+    exchanges: existing.exchanges ?? []
+  };
 }
 
 export function createCustomRequest(name = "New Request"): {

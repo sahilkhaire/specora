@@ -19,14 +19,14 @@ describe("mapTryoutSendError", () => {
   it("maps direct network failures to connectivity or proxy action", () => {
     const message = mapTryoutSendError(new TypeError("Failed to fetch"), false);
     expect(message).toBe(
-      "Network request failed (often CORS or connectivity). Next step: check API reachability or enable proxy mode."
+      "Network request failed (often CORS or connectivity). Next step: check API reachability or enable local proxy mode (`npx specora proxy --port 8787`)."
     );
   });
 
   it("maps proxy connectivity failures to local proxy action", () => {
     const message = mapTryoutSendError(new TypeError("Failed to fetch"), true);
     expect(message).toBe(
-      "Could not reach the local proxy. Next step: start `specora proxy` and confirm the proxy URL."
+      "Could not reach the local proxy. Next step: start `npx specora proxy --port 8787` and confirm the proxy URL."
     );
   });
 

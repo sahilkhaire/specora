@@ -38,13 +38,11 @@ export function getDeploymentConfig(): DeploymentConfig {
     surfaceRaw === "docs" || surfaceRaw === "embed" ? surfaceRaw : "full";
 
   const apiBaseUrl = envString("VITE_API_BASE_URL", "");
-  const tryoutProxyUrl =
-    envString("VITE_TRYOUT_PROXY_URL", "") ||
-    (apiBaseUrl ? `${apiBaseUrl.replace(/\/$/, "")}/proxy` : "http://localhost:8787/proxy");
-  const tryoutUseProxy = envBool(
-    "VITE_TRYOUT_USE_PROXY",
-    Boolean(apiBaseUrl) || import.meta.env.PROD
+  const tryoutProxyUrl = envString(
+    "VITE_TRYOUT_PROXY_URL",
+    "http://localhost:8787/proxy"
   );
+  const tryoutUseProxy = envBool("VITE_TRYOUT_USE_PROXY", false);
 
   return {
     mode,

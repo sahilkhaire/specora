@@ -37,9 +37,10 @@ Use this checklist when validating onboarding from a fresh environment:
 3. Verify the two primary local entrypoints:
    - Web: `npm run dev:web`
    - CLI: `npm run dev:cli`
-4. Verify try-out proxy flow:
+4. Verify try-out proxy flow (local-first; hosted SaaS does not provide a remote proxy):
    - Start proxy with `npx specora proxy --port 8787` (or `npm run -w @specora/cli dev -- proxy --port 8787`)
-   - In web try-out, enable local proxy mode and keep `http://localhost:8787/proxy`
+   - In web try-out, enable Proxy and set `http://localhost:8787/proxy`
+   - Self-hosted enterprise (`docker-compose`) may enable `POST /proxy` on the API with `PROXY_ENABLED=true`
 5. Record any missing steps and update docs in the same PR.
 
 ## Project Structure

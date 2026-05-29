@@ -71,5 +71,26 @@ void (async () => {
   assert.ok(imported20);
   assert.equal(imported20!.requests[0]?.url, "https://api.example.com/health");
 
+  const v1 = {
+    id: "col-1",
+    name: "Legacy",
+    folders: [{ id: "f1", name: "Users", folder: null }],
+    requests: [
+      {
+        id: "r1",
+        name: "List",
+        folder: "f1",
+        method: "GET",
+        url: "https://api.example.com/users",
+        headers: "Accept: application/json"
+      }
+    ]
+  };
+
+  const importedV1 = await importPostmanCollection(v1);
+  assert.ok(importedV1);
+  assert.equal(importedV1!.requests.length, 1);
+  assert.equal(importedV1!.folders.length, 1);
+
   console.log("import-postman.test.ts: ok");
 })();

@@ -19,6 +19,7 @@ import {
   buildRequestUrl,
   buildAuthHeaders,
   mapTryoutSendError,
+  prettyResponseBody,
   safeParseRecord,
   scaffoldFromParameters
 } from "@/features/tryout/tryout-utils";
@@ -30,6 +31,7 @@ import { SettingsView } from "@/features/settings/SettingsView";
 import { useWorkspaces } from "@/features/workspaces/use-workspaces";
 import { ApiClientWorkbench } from "@/app/ApiClientWorkbench";
 import { AppHeader } from "@/app/AppHeader";
+import type { WorkbenchHeaderConfig } from "@/app/header-types";
 import { fetchViaTryoutProxy } from "@/features/http/proxy-client";
 
 declare global {
@@ -75,11 +77,7 @@ function getSystemTheme(): "light" | "dark" {
 }
 
 function prettyBody(raw: string): string {
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2);
-  } catch {
-    return raw;
-  }
+  return prettyResponseBody(raw);
 }
 
 function methodTone(method: string): string {
@@ -158,7 +156,7 @@ export function App() {
   const [isEnvPanelOpen, setIsEnvPanelOpen] = useState(false);
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
   const [showSettings, setShowSettings] = useState(false);
-  const [workbenchHeaderActions, setWorkbenchHeaderActions] = useState<React.ReactNode>(null);
+  const [workbenchHeader, setWorkbenchHeader] = useState<WorkbenchHeaderConfig | null>(null);
   const showTryOut = !isEmbedSurface();
   const showImportSpec = isFullAppSurface() && !window.__SPECORA_EMBED__?.specUrl;
 
@@ -677,7 +675,7 @@ export function App() {
         themeMode={themeMode}
         onThemeModeChange={setThemeMode}
         showImportSpec={showImportSpec}
-        extraActions={useApiClient ? workbenchHeaderActions : null}
+        workbench={useApiClient ? workbenchHeader : null}
       />
 
       <div className="app-body">
@@ -687,7 +685,7 @@ export function App() {
               workspaceId={activeWorkspaceId}
               spec={spec!}
               operations={operations}
-              onHeaderActionsChange={setWorkbenchHeaderActions}
+              onWorkbenchHeaderChange={setWorkbenchHeader}
               serverUrl={serverUrl}
               onServerUrlChange={setServerUrl}
               useProxy={useProxy}
