@@ -16,13 +16,14 @@ import {
 import { deploymentConfig, isEmbedSurface, isFullAppSurface } from "@/config/deployment";
 import {
   applyVariables,
-  buildRequestUrl,
+  resolveRequestUrl,
   buildAuthHeaders,
   mapTryoutSendError,
   prettyResponseBody,
   safeParseRecord,
-  scaffoldFromParameters
+  scaffoldFromOperation
 } from "@/features/tryout/tryout-utils";
+import { parseParamRowsToRecord, serializeParamRecord } from "@/features/tryout/param-rows";
 import type { AuthConfig, AuthType } from "@/features/tryout/tryout-utils";
 import { TryOutPanel } from "@/features/tryout/TryOutPanel";
 import { useEnvironments } from "@/features/environments/use-environments";
@@ -459,11 +460,12 @@ export function App() {
   const selectedOpKey = selectedOperation ? operationKey(selectedOperation) : "";
   useEffect(() => {
     if (!selectedOperation) return;
-    const { pathParams, queryParams, headers } = scaffoldFromParameters(selectedOperation.parameters);
+    const { pathParams, queryParams, headers } = scaffoldFromOperation(selectedOperation);
+    const fmtParams = (obj: Record<string, string>) => serializeParamRecord(obj);
     const fmt = (obj: Record<string, string>) =>
       Object.keys(obj).length > 0 ? JSON.stringify(obj, null, 2) : "{}";
-    setPathParamsInput(fmt(pathParams));
-    setQueryParamsInput(fmt(queryParams));
+    setPathParamsInput(fmtParams(pathParams));
+    setQueryParamsInput(fmtParams(queryParams));
     setHeadersInput(fmt(headers));
   // selectedOperation object reference changes on every search keystroke even for the same op;
   // selectedOpKey is stable — only changes when a genuinely different operation is picked.
@@ -563,17 +565,11 @@ export function App() {
       return;
     }
 
-    const parsedPath = safeParseRecord(pathParamsInput);
-    if (!parsedPath.ok) {
-      setRequestError(`Path params error: ${parsedPath.error}`);
-      return;
-    }
-
-    const parsedQuery = safeParseRecord(queryParamsInput);
-    if (!parsedQuery.ok) {
-      setRequestError(`Query params error: ${parsedQuery.error}`);
-      return;
-    }
+    const scaffold = scaffoldFromOperation(selectedOperation);
+    const pathParams = parseParamRowsToRecord(pathParamsInput, scaffold.pathParams, {
+      respectEnabled: false
+    });
+    const queryParams = parseParamRowsToRecord(queryParamsInput, scaffold.queryParams);
 
     const parsedHeaders = safeParseRecord(headersInput);
     if (!parsedHeaders.ok) {
@@ -597,11 +593,11 @@ export function App() {
     const applyVars = (obj: Record<string, string>): Record<string, string> =>
       Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, applyVariables(v, vars)]));
 
-    const targetUrl = buildRequestUrl({
-      baseUrl: applyVariables(serverUrl, vars),
+    const targetUrl = resolveRequestUrl({
+      serverUrl: applyVariables(serverUrl, vars),
       endpointPath: selectedOperation.path,
-      pathParams: applyVars(parsedPath.data),
-      queryParams: applyVars(parsedQuery.data),
+      pathParams: applyVars(pathParams),
+      queryParams: applyVars(queryParams)
     });
 
     const method = selectedOperation.method;

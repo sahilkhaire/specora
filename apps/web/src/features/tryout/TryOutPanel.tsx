@@ -1,19 +1,25 @@
 import { useMemo, useState } from "react";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import type { OperationItem } from "@/features/spec/spec-utils";
 import type { Environment } from "@/features/environments/env-types";
 import type { SavedExchange } from "@/features/collections/collection-types";
 import { SavedExchangesPanel } from "@/features/collections/SavedExchangesPanel";
 import {
   applyVariables,
+  resolveRequestUrl,
+  resolveDisplayRequestUrl,
   buildAuthHeaders,
   buildCurlCommand,
-  buildRequestUrl,
   methodBadgeClass,
   safeParseRecord,
+  scaffoldFromOperation,
   statusBadgeClass,
   type AuthConfig,
   type AuthType,
 } from "./tryout-utils";
+import { ParamKeyValueTable } from "./ParamKeyValueTable";
+import { VariableHighlightText } from "./VariableHighlight";
+import { mergeParamRowsInput, paramRowsToRecord, parseParamRowsInput } from "./param-rows";
 
 type TryoutTab = "params" | "headers" | "body" | "auth" | "curl" | "saved";
 
@@ -21,6 +27,8 @@ interface TryOutPanelProps {
   variant?: "standalone" | "embedded";
   /** When set (e.g. workbench), overrides operation method for send/display. */
   requestMethod?: string;
+  /** Saved request path/URL when embedded (workbench). */
+  requestPath?: string;
   selectedOperation: OperationItem | null;
   serverUrl: string;
   onServerUrlChange: (value: string) => void;
@@ -62,6 +70,7 @@ interface TryOutPanelProps {
 export function TryOutPanel({
   variant = "standalone",
   requestMethod,
+  requestPath,
   selectedOperation,
   serverUrl,
   onServerUrlChange,
@@ -106,26 +115,79 @@ export function TryOutPanel({
   const method = requestMethod ?? selectedOperation?.method ?? "GET";
   const canSendBody = !["GET", "HEAD"].includes(method);
 
-  const previewUrl = useMemo(() => {
-    if (!selectedOperation || !serverUrl.trim()) return "";
-    const parsedPath = safeParseRecord(pathParamsInput);
-    const parsedQuery = safeParseRecord(queryParamsInput);
-    if (!parsedPath.ok || !parsedQuery.ok) return "";
+  const paramScaffold = useMemo(() => {
+    if (!selectedOperation) {
+      return { pathParams: {}, queryParams: {} };
+    }
+    const scaffold = scaffoldFromOperation(selectedOperation);
+    return {
+      pathParams: scaffold.pathParams,
+      queryParams: scaffold.queryParams
+    };
+  }, [selectedOperation]);
 
-    const applyVars = (obj: Record<string, string>) =>
-      Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, applyVariables(v, vars)]));
+  const endpointPath = selectedOperation?.path ?? requestPath ?? "";
+
+  const rawPreviewUrl = useMemo(() => {
+    if (!endpointPath.trim() || !serverUrl.trim()) return "";
+
+    const queryParams = paramRowsToRecord(
+      Object.keys(paramScaffold.queryParams).length > 0
+        ? mergeParamRowsInput(queryParamsInput, paramScaffold.queryParams)
+        : parseParamRowsInput(queryParamsInput)
+    );
 
     try {
-      return buildRequestUrl({
-        baseUrl: applyVariables(serverUrl, vars),
-        endpointPath: selectedOperation.path,
-        pathParams: applyVars(parsedPath.data),
-        queryParams: applyVars(parsedQuery.data),
+      return resolveDisplayRequestUrl({
+        serverUrl,
+        endpointPath,
+        queryParams
       });
     } catch {
       return "";
     }
-  }, [selectedOperation, serverUrl, pathParamsInput, queryParamsInput, vars]);
+  }, [endpointPath, serverUrl, queryParamsInput, paramScaffold]);
+
+  const previewUrl = useMemo(() => {
+    if (!endpointPath.trim() || !serverUrl.trim()) return "";
+
+    const applyVars = (obj: Record<string, string>) =>
+      Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, applyVariables(v, vars)]));
+
+    const pathParams = applyVars(
+      paramRowsToRecord(
+        Object.keys(paramScaffold.pathParams).length > 0
+          ? mergeParamRowsInput(pathParamsInput, paramScaffold.pathParams)
+          : parseParamRowsInput(pathParamsInput),
+        { respectEnabled: false }
+      )
+    );
+    const queryParams = applyVars(
+      paramRowsToRecord(
+        Object.keys(paramScaffold.queryParams).length > 0
+          ? mergeParamRowsInput(queryParamsInput, paramScaffold.queryParams)
+          : parseParamRowsInput(queryParamsInput)
+      )
+    );
+
+    try {
+      return resolveRequestUrl({
+        serverUrl: applyVariables(serverUrl, vars),
+        endpointPath: applyVariables(endpointPath, vars),
+        pathParams,
+        queryParams
+      });
+    } catch {
+      return "";
+    }
+  }, [
+    endpointPath,
+    serverUrl,
+    pathParamsInput,
+    queryParamsInput,
+    vars,
+    paramScaffold
+  ]);
 
   const curlCommand = useMemo(() => {
     if (!previewUrl || !selectedOperation) return "";
@@ -239,10 +301,18 @@ export function TryOutPanel({
             </button>
           </div>
 
-          {previewUrl ? (
-            <div className="tryout-preview-url" title={previewUrl}>
+          {rawPreviewUrl ? (
+            <div className="tryout-preview-url" title={previewUrl || rawPreviewUrl}>
               <span className="tryout-preview-label">Request</span>
-              <code>{previewUrl}</code>
+              <code>
+                <VariableHighlightText text={rawPreviewUrl} variables={vars} />
+              </code>
+              {previewUrl && previewUrl !== rawPreviewUrl ? (
+                <>
+                  <span className="tryout-preview-label tryout-preview-label--resolved">Resolved</span>
+                  <code className="tryout-preview-url-resolved">{previewUrl}</code>
+                </>
+              ) : null}
             </div>
           ) : null}
 
@@ -264,7 +334,13 @@ export function TryOutPanel({
         </>
       ) : null}
 
-      <div className="tryout-tabs-row">
+      <PanelGroup
+        direction="vertical"
+        autoSaveId="specora-tryout-request-response"
+        className="tryout-split"
+      >
+        <Panel defaultSize={52} minSize={18} className="tryout-split-request">
+          <div className="tryout-tabs-row">
         <div className="tryout-tabs" role="tablist" aria-label="Request parts">
         {visibleTabs.includes("params") ? (
         <button
@@ -345,19 +421,19 @@ export function TryOutPanel({
             <span>Proxy</span>
           </label>
         ) : null}
-      </div>
+          </div>
 
-      {embedded && useProxy ? (
-        <input
-          className="tryout-proxy-inline-input"
-          value={proxyUrl}
-          onChange={(event) => onProxyUrlChange(event.target.value)}
-          placeholder="http://localhost:8787/proxy"
-          aria-label="Proxy URL"
-        />
-      ) : null}
+          {embedded && useProxy ? (
+            <input
+              className="tryout-proxy-inline-input"
+              value={proxyUrl}
+              onChange={(event) => onProxyUrlChange(event.target.value)}
+              placeholder="http://localhost:8787/proxy"
+              aria-label="Proxy URL"
+            />
+          ) : null}
 
-      <div className="tryout-tab-panel">
+          <div className="tryout-tab-panel">
           {tab === "curl" ? (
             <div className="tryout-curl-block">
               <div className="tryout-curl-head">
@@ -378,25 +454,22 @@ export function TryOutPanel({
           ) : null}
 
           {tab === "params" ? (
-            <div className="tryout-field-grid">
-              <label className="tryout-code-field">
-                <span>Path params (JSON)</span>
-                <textarea
-                  value={pathParamsInput}
-                  onChange={(event) => onPathParamsChange(event.target.value)}
-                  rows={5}
-                  spellCheck={false}
-                />
-              </label>
-              <label className="tryout-code-field">
-                <span>Query params (JSON)</span>
-                <textarea
-                  value={queryParamsInput}
-                  onChange={(event) => onQueryParamsChange(event.target.value)}
-                  rows={5}
-                  spellCheck={false}
-                />
-              </label>
+            <div className="tryout-params-stack">
+              <ParamKeyValueTable
+                label="Path params"
+                value={pathParamsInput}
+                onChange={onPathParamsChange}
+                schemaParams={paramScaffold.pathParams}
+                enableToggle={false}
+                variables={vars}
+              />
+              <ParamKeyValueTable
+                label="Query params"
+                value={queryParamsInput}
+                onChange={onQueryParamsChange}
+                schemaParams={paramScaffold.queryParams}
+                variables={vars}
+              />
             </div>
           ) : null}
 
@@ -499,11 +572,15 @@ export function TryOutPanel({
               onDelete={(id) => onDeleteExchange?.(id)}
             />
           ) : null}
-      </div>
+          </div>
 
-      {requestError ? <p className="tryout-error">{requestError}</p> : null}
+          {requestError ? <p className="tryout-error">{requestError}</p> : null}
+        </Panel>
 
-      <div className={`tryout-response ${hasResponse ? "tryout-response--active" : ""}`}>
+        <PanelResizeHandle className="tryout-split-resize" aria-label="Resize request and response panels" />
+
+        <Panel defaultSize={48} minSize={18} className="tryout-split-response">
+          <div className={`tryout-response ${hasResponse ? "tryout-response--active" : ""}`}>
         <div className="tryout-response-head">
           <span className="tryout-response-title">Response</span>
           <div className="tryout-response-meta">
@@ -557,7 +634,9 @@ export function TryOutPanel({
         >
           {responseDisplay.text}
         </pre>
-      </div>
+          </div>
+        </Panel>
+      </PanelGroup>
     </article>
   );
 }

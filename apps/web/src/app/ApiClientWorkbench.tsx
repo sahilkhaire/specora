@@ -13,12 +13,20 @@ import {
 } from "@/features/schemas/operation-payloads";
 import { sampleToJson } from "@/features/schemas/schema-samples";
 import { TryOutPanel } from "@/features/tryout/TryOutPanel";
-import { scaffoldFromParameters, parseRecordJson, methodBadgeClass, prettyResponseBody } from "@/features/tryout/tryout-utils";
+import { VariableHighlightInput } from "@/features/tryout/VariableHighlight";
+import { scaffoldFromOperation, parseRecordJson, methodBadgeClass, prettyResponseBody, applyVariables, resolveRequestUrl, resolveDisplayRequestUrl, stripUrlQuery, pathFromColonParams } from "@/features/tryout/tryout-utils";
+import {
+  mergeParamRowsInput,
+  parseParamRowsToRecord,
+  serializeParamRecord,
+  serializeParamRows
+} from "@/features/tryout/param-rows";
 import type { AuthType } from "@/features/tryout/tryout-utils";
 import type { Environment } from "@/features/environments/env-types";
 import { AppShell } from "./AppShell";
 import { CollectionSidebar } from "@/features/collections/CollectionSidebar";
 import { PostmanImportDialog } from "@/features/collections/PostmanImportDialog";
+import { SaveExchangeDialog } from "@/features/collections/SaveExchangeDialog";
 import { RequestHistoryPanel } from "@/features/collections/RequestHistoryPanel";
 import { useCollections } from "@/features/collections/use-collections";
 import { createCustomRequest } from "@/features/collections/collection-bootstrap";
@@ -88,6 +96,8 @@ export function ApiClientWorkbench({
   const [requestError, setRequestError] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [postmanOpen, setPostmanOpen] = useState(false);
+  const [saveExchangeOpen, setSaveExchangeOpen] = useState(false);
+  const [saveExchangeDefaultName, setSaveExchangeDefaultName] = useState("");
   const [historyOpen, setHistoryOpen] = useState(readHistoryPanelOpen);
   const [schemaPanelOpen, setSchemaPanelOpen] = useState(readSchemaPanelOpen);
   const [history, setHistory] = useState<RequestHistoryEntry[]>([]);
@@ -102,12 +112,72 @@ export function ApiClientWorkbench({
     return findOperationByKey(operations, selectedRequest.operationKey) ?? null;
   }, [operations, selectedRequest?.operationKey]);
 
+  const paramScaffold = useMemo(() => {
+    if (!linkedOperation) return null;
+    return scaffoldFromOperation(linkedOperation);
+  }, [linkedOperation]);
+
+  const displayUrl = useMemo(() => {
+    if (!selectedRequest) return "";
+    const pathTemplate = linkedOperation?.path ?? selectedRequest.url;
+
+    return resolveDisplayRequestUrl({
+      serverUrl,
+      endpointPath: pathTemplate,
+      queryParams: parseParamRowsToRecord(queryParamsInput, paramScaffold?.queryParams)
+    });
+  }, [linkedOperation?.path, paramScaffold, queryParamsInput, selectedRequest, serverUrl]);
+
+  const resolvedUrl = useMemo(() => {
+    if (!selectedRequest) return "";
+    const vars = activeEnv?.variables ?? {};
+    const applyVars = (obj: Record<string, string>) =>
+      Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, applyVariables(v, vars)]));
+
+    return resolveRequestUrl({
+      serverUrl: applyVariables(serverUrl, vars),
+      endpointPath: applyVariables(selectedRequest.url, vars),
+      pathParams: applyVars(
+        parseParamRowsToRecord(pathParamsInput, paramScaffold?.pathParams, { respectEnabled: false })
+      ),
+      queryParams: applyVars(parseParamRowsToRecord(queryParamsInput, paramScaffold?.queryParams))
+    });
+  }, [
+    activeEnv,
+    paramScaffold,
+    pathParamsInput,
+    queryParamsInput,
+    selectedRequest,
+    serverUrl
+  ]);
+
   useEffect(() => {
     if (!selectedRequest) return;
 
-    setPathParamsInput(JSON.stringify(selectedRequest.pathParams, null, 2));
-    setQueryParamsInput(JSON.stringify(selectedRequest.queryParams, null, 2));
-    setHeadersInput(JSON.stringify(selectedRequest.headers, null, 2));
+    if (linkedOperation) {
+      const scaffold = scaffoldFromOperation(linkedOperation);
+      setPathParamsInput(
+        serializeParamRows(
+          mergeParamRowsInput(serializeParamRecord(selectedRequest.pathParams), scaffold.pathParams)
+        )
+      );
+      setQueryParamsInput(
+        serializeParamRows(
+          mergeParamRowsInput(serializeParamRecord(selectedRequest.queryParams), scaffold.queryParams)
+        )
+      );
+      setHeadersInput(JSON.stringify(
+        Object.keys(scaffold.headers).length > 0
+          ? { ...scaffold.headers, ...selectedRequest.headers }
+          : selectedRequest.headers,
+        null,
+        2
+      ));
+    } else {
+      setPathParamsInput(serializeParamRecord(selectedRequest.pathParams));
+      setQueryParamsInput(serializeParamRecord(selectedRequest.queryParams));
+      setHeadersInput(JSON.stringify(selectedRequest.headers, null, 2));
+    }
     setRequestBody(selectedRequest.body.content);
     setAuthType(selectedRequest.authType ?? "none");
     setAuthValue(selectedRequest.authValue ?? "");
@@ -118,19 +188,15 @@ export function ApiClientWorkbench({
     setRequestTiming(null);
     setRequestError("");
 
-    if (linkedOperation && Object.keys(selectedRequest.pathParams).length === 0) {
-      const scaffold = scaffoldFromParameters(linkedOperation.parameters);
-      setPathParamsInput(JSON.stringify(scaffold.pathParams, null, 2));
-      setQueryParamsInput(JSON.stringify(scaffold.queryParams, null, 2));
-      setHeadersInput(JSON.stringify(scaffold.headers, null, 2));
-    }
-  }, [selectedRequest?.id, linkedOperation, selectedRequest]);
+  }, [selectedRequest?.id, linkedOperation?.key]);
 
   const persistDraft = useCallback(() => {
     if (!selectedRequest) return;
     updateRequest(selectedRequest.id, {
-      pathParams: parseRecordJson(pathParamsInput),
-      queryParams: parseRecordJson(queryParamsInput),
+      pathParams: parseParamRowsToRecord(pathParamsInput, paramScaffold?.pathParams, {
+        respectEnabled: false
+      }),
+      queryParams: parseParamRowsToRecord(queryParamsInput, paramScaffold?.queryParams),
       headers: parseRecordJson(headersInput),
       body: requestBody ? { mode: "json", content: requestBody } : { mode: "none", content: "" },
       authType,
@@ -148,6 +214,7 @@ export function ApiClientWorkbench({
     queryParamsInput,
     requestBody,
     selectedRequest,
+    paramScaffold,
     updateRequest
   ]);
 
@@ -157,8 +224,10 @@ export function ApiClientWorkbench({
 
     const draft: SavedRequest = {
       ...selectedRequest,
-      pathParams: parseRecordJson(pathParamsInput),
-      queryParams: parseRecordJson(queryParamsInput),
+      pathParams: parseParamRowsToRecord(pathParamsInput, paramScaffold?.pathParams, {
+        respectEnabled: false
+      }),
+      queryParams: parseParamRowsToRecord(queryParamsInput, paramScaffold?.queryParams),
       headers: parseRecordJson(headersInput),
       body: requestBody.trim()
         ? { mode: "json", content: requestBody }
@@ -215,6 +284,7 @@ export function ApiClientWorkbench({
     authValue,
     history,
     pathParamsInput,
+    paramScaffold,
     persistDraft,
     proxyUrl,
     queryParamsInput,
@@ -227,7 +297,7 @@ export function ApiClientWorkbench({
     workspaceId
   ]);
 
-  const handleSaveExchange = useCallback(() => {
+  const handleSaveExchangeClick = useCallback(() => {
     if (!selectedRequest || !requestResponse.trim()) return;
 
     const defaultName = `${requestStatus || "Response"} · ${new Date().toLocaleString(undefined, {
@@ -236,58 +306,80 @@ export function ApiClientWorkbench({
       hour: "numeric",
       minute: "2-digit"
     })}`;
-    const label = window.prompt("Name this saved request-response (optional):", defaultName);
-    if (label === null) return;
+    setSaveExchangeDefaultName(defaultName);
+    setSaveExchangeOpen(true);
+  }, [requestResponse, requestStatus, selectedRequest]);
 
-    const exchange: SavedExchange = {
-      id: `ex_${crypto.randomUUID().slice(0, 8)}`,
-      savedRequestId: selectedRequest.id,
-      name: label.trim() || defaultName,
-      requestSnapshot: {
-        method: selectedRequest.method,
-        url: selectedRequest.url,
-        pathParams: parseRecordJson(pathParamsInput),
-        queryParams: parseRecordJson(queryParamsInput),
-        headers: parseRecordJson(headersInput),
-        body: requestBody
-          ? { mode: "json", content: requestBody }
-          : { mode: "none", content: "" },
-        authType,
-        authValue,
-        authKeyName
-      },
-      response: {
-        status: requestStatus ? Number(requestStatus) : undefined,
-        durationMs: requestTiming ?? 0,
-        headers: requestHeaders,
-        body: requestResponse
-      },
-      createdAt: new Date().toISOString()
-    };
+  const handleSaveExchangeConfirm = useCallback(
+    (label: string) => {
+      if (!selectedRequest || !requestResponse.trim()) return;
 
-    addExchange(exchange);
-    toast.success("Saved request and response");
-  }, [
-    addExchange,
-    authKeyName,
-    authType,
-    authValue,
-    headersInput,
-    pathParamsInput,
-    queryParamsInput,
-    requestBody,
-    requestHeaders,
-    requestResponse,
-    requestStatus,
-    requestTiming,
-    selectedRequest
-  ]);
+      const defaultName = saveExchangeDefaultName;
+      const exchange: SavedExchange = {
+        id: `ex_${crypto.randomUUID().slice(0, 8)}`,
+        savedRequestId: selectedRequest.id,
+        name: label.trim() || defaultName,
+        requestSnapshot: {
+          method: selectedRequest.method,
+          url: selectedRequest.url,
+          pathParams: parseParamRowsToRecord(pathParamsInput, paramScaffold?.pathParams, {
+        respectEnabled: false
+      }),
+          queryParams: parseParamRowsToRecord(queryParamsInput, paramScaffold?.queryParams),
+          headers: parseRecordJson(headersInput),
+          body: requestBody
+            ? { mode: "json", content: requestBody }
+            : { mode: "none", content: "" },
+          authType,
+          authValue,
+          authKeyName
+        },
+        response: {
+          status: requestStatus ? Number(requestStatus) : undefined,
+          durationMs: requestTiming ?? 0,
+          headers: requestHeaders,
+          body: requestResponse
+        },
+        createdAt: new Date().toISOString()
+      };
+
+      addExchange(exchange);
+      toast.success("Saved request and response");
+    },
+    [
+      addExchange,
+      authKeyName,
+      authType,
+      authValue,
+      headersInput,
+      pathParamsInput,
+      queryParamsInput,
+      paramScaffold,
+      requestBody,
+      requestHeaders,
+      requestResponse,
+      requestStatus,
+      requestTiming,
+      saveExchangeDefaultName,
+      selectedRequest
+    ]
+  );
 
   const handleLoadExchange = useCallback(
     (exchange: SavedExchange) => {
       const snap = exchange.requestSnapshot;
-      setPathParamsInput(JSON.stringify(snap.pathParams, null, 2));
-      setQueryParamsInput(JSON.stringify(snap.queryParams, null, 2));
+      if (linkedOperation) {
+        const scaffold = scaffoldFromOperation(linkedOperation);
+        setPathParamsInput(
+          serializeParamRows(mergeParamRowsInput(serializeParamRecord(snap.pathParams), scaffold.pathParams))
+        );
+        setQueryParamsInput(
+          serializeParamRows(mergeParamRowsInput(serializeParamRecord(snap.queryParams), scaffold.queryParams))
+        );
+      } else {
+        setPathParamsInput(serializeParamRecord(snap.pathParams));
+        setQueryParamsInput(serializeParamRecord(snap.queryParams));
+      }
       setHeadersInput(JSON.stringify(snap.headers, null, 2));
       setRequestBody(snap.body.content);
       setAuthType(snap.authType ?? "none");
@@ -315,7 +407,7 @@ export function ApiClientWorkbench({
 
       toast.success("Loaded saved request and response");
     },
-    [selectedRequest, updateRequest]
+    [linkedOperation, selectedRequest, updateRequest]
   );
 
   const handleDeleteExchange = useCallback(
@@ -456,40 +548,66 @@ export function ApiClientWorkbench({
           <div className="client-main-stack">
             {selectedRequest ? (
               <>
-                <div className="request-command-bar">
-                  <select
-                    className={`request-method-select ${methodBadgeClass(selectedRequest.method)}`}
-                    value={selectedRequest.method}
-                    onChange={(e) =>
-                      updateRequest(selectedRequest.id, { method: e.target.value })
-                    }
-                    aria-label="HTTP method"
-                  >
-                    {["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="request-url-input"
-                    value={selectedRequest.url}
-                    onChange={(e) => updateRequest(selectedRequest.id, { url: e.target.value })}
-                    placeholder="https://api.example.com/path"
-                    aria-label="Request URL"
-                  />
-                  <button
-                    type="button"
-                    className={`request-send-btn request-send-btn--${selectedRequest.method.toLowerCase()}`}
-                    onClick={() => void sendRequest()}
-                    disabled={isSending}
-                  >
-                    {isSending ? "Sending…" : "Send"}
-                  </button>
+                <div className="request-url-stack">
+                  <div className="request-command-bar">
+                    <select
+                      className={`request-method-select ${methodBadgeClass(selectedRequest.method)}`}
+                      value={selectedRequest.method}
+                      onChange={(e) =>
+                        updateRequest(selectedRequest.id, { method: e.target.value })
+                      }
+                      aria-label="HTTP method"
+                    >
+                      {["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                    <VariableHighlightInput
+                      className="request-url-input"
+                      value={displayUrl || selectedRequest.url}
+                      variables={activeEnv?.variables ?? {}}
+                      onChange={(next) => {
+                        const withoutQuery = stripUrlQuery(next);
+                        let pathTemplate = withoutQuery;
+                        if (withoutQuery.startsWith("http")) {
+                          try {
+                            pathTemplate = new URL(withoutQuery).pathname;
+                          } catch {
+                            pathTemplate =
+                              withoutQuery.replace(/^https?:\/\/[^/]+/i, "") || "/";
+                          }
+                        }
+                        updateRequest(selectedRequest.id, {
+                          url: pathFromColonParams(
+                            pathTemplate.startsWith("/") ? pathTemplate : `/${pathTemplate}`
+                          )
+                        });
+                      }}
+                      placeholder="https://api.example.com/path/:id"
+                      aria-label="Request URL"
+                    />
+                    <button
+                      type="button"
+                      className={`request-send-btn request-send-btn--${selectedRequest.method.toLowerCase()}`}
+                      onClick={() => void sendRequest()}
+                      disabled={isSending}
+                    >
+                      {isSending ? "Sending…" : "Send"}
+                    </button>
+                  </div>
+                  {resolvedUrl && resolvedUrl !== displayUrl ? (
+                    <div className="request-url-resolved-hint" title={resolvedUrl}>
+                      <span className="request-url-resolved-hint-label">Sends as</span>
+                      <code>{resolvedUrl}</code>
+                    </div>
+                  ) : null}
                 </div>
                 <TryOutPanel
                   variant="embedded"
                   requestMethod={selectedRequest.method}
+                  requestPath={selectedRequest.url}
                   selectedOperation={linkedOperation}
                   serverUrl={serverUrl}
                   onServerUrlChange={onServerUrlChange}
@@ -549,7 +667,7 @@ export function ApiClientWorkbench({
                       : undefined
                   }
                   savedExchanges={exchangesForSelected}
-                  onSaveExchange={handleSaveExchange}
+                  onSaveExchange={handleSaveExchangeClick}
                   onLoadExchange={handleLoadExchange}
                   onDeleteExchange={handleDeleteExchange}
                 />
@@ -614,6 +732,12 @@ export function ApiClientWorkbench({
           toast.success(`Environment "${name}" ready — open Environment panel to apply`);
           void variables;
         }}
+      />
+      <SaveExchangeDialog
+        open={saveExchangeOpen}
+        defaultName={saveExchangeDefaultName}
+        onOpenChange={setSaveExchangeOpen}
+        onSave={handleSaveExchangeConfirm}
       />
     </>
   );

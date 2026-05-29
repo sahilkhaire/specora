@@ -4,11 +4,12 @@ import { fetchViaTryoutProxy } from "@/features/http/proxy-client";
 import {
   applyVariables,
   buildAuthHeaders,
-  buildRequestUrl,
+  resolveRequestUrl,
   mapTryoutSendError,
   parseRecordJson,
   type AuthConfig
 } from "@/features/tryout/tryout-utils";
+import { parseParamRowsToRecord } from "@/features/tryout/param-rows";
 
 export interface ExecuteRequestOptions {
   request: SavedRequest;
@@ -54,14 +55,24 @@ export async function executeRequest(options: ExecuteRequestOptions): Promise<Ex
 
   const baseUrl = applyVariables(serverUrl || environment?.baseUrl || "", environment?.variables ?? {});
   const urlPath = applyVariables(request.url, environment?.variables ?? {});
-  const fullUrl = urlPath.startsWith("http")
-    ? urlPath
-    : buildRequestUrl({
-        baseUrl,
-        endpointPath: urlPath,
-        pathParams,
-        queryParams
-      });
+  const resolvedPathParams = Object.fromEntries(
+    Object.entries(pathParams).map(([key, value]) => [
+      key,
+      applyVariables(value, environment?.variables ?? {})
+    ])
+  );
+  const resolvedQueryParams = Object.fromEntries(
+    Object.entries(queryParams).map(([key, value]) => [
+      key,
+      applyVariables(value, environment?.variables ?? {})
+    ])
+  );
+  const fullUrl = resolveRequestUrl({
+    serverUrl: baseUrl,
+    endpointPath: urlPath,
+    pathParams: resolvedPathParams,
+    queryParams: resolvedQueryParams
+  });
 
   const headers: Record<string, string> = {
     ...buildAuthHeaders(envAuth),
@@ -147,8 +158,8 @@ export function savedRequestFromTryoutState(input: {
     url: input.url,
     source: input.source,
     operationKey: input.operationKey,
-    pathParams: parseRecordJson(input.pathParamsInput),
-    queryParams: parseRecordJson(input.queryParamsInput),
+    pathParams: parseParamRowsToRecord(input.pathParamsInput),
+    queryParams: parseParamRowsToRecord(input.queryParamsInput),
     headers: parseRecordJson(input.headersInput),
     body: input.requestBody
       ? { mode: "json", content: input.requestBody }

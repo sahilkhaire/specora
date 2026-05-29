@@ -1,4 +1,4 @@
-import type { OpenApiParameter } from "@/features/spec/spec-utils";
+import type { OpenApiParameter, OperationItem } from "@/features/spec/spec-utils";
 
 export interface RequestConfig {
   baseUrl: string;
@@ -44,27 +44,132 @@ export function safeParseRecord(value: string): {
   }
 }
 
-export function buildRequestUrl(config: RequestConfig): string {
-  const cleanedBase = config.baseUrl.trim().replace(/\/$/, "");
-  const withPathParams = config.endpointPath.replace(/\{([^}]+)\}/g, (_full, key: string) => {
-    const replacement = config.pathParams[key];
+export function stripUrlQuery(path: string): string {
+  const queryIndex = path.indexOf("?");
+  return queryIndex === -1 ? path : path.slice(0, queryIndex);
+}
+
+export function substitutePathParams(path: string, pathParams: Record<string, string>): string {
+  return path.replace(/\{([^}]+)\}/g, (_full, key: string) => {
+    const replacement = pathParams[key];
     return encodeURIComponent(replacement ?? `{${key}}`);
   });
+}
 
+export function pathWithColonParams(path: string): string {
+  return stripUrlQuery(path).replace(/\{([^}]+)\}/g, (_full, key: string) => `:${key}`);
+}
+
+export function pathFromColonParams(path: string): string {
+  return stripUrlQuery(path).replace(/:([A-Za-z_][\w-]*)/g, (_full, key: string) => `{${key}}`);
+}
+
+function appendQueryParams(baseUrl: string, queryParams: Record<string, string>): string {
+  const query = new URLSearchParams();
+  Object.entries(queryParams).forEach(([key, value]) => {
+    query.set(key, value);
+  });
+  const queryString = query.toString();
+  return queryString ? `${baseUrl}?${queryString}` : baseUrl;
+}
+
+/** Preview URL: path placeholders as :paramName, query params as literal values. */
+export function resolveDisplayRequestUrl(input: {
+  serverUrl: string;
+  endpointPath: string;
+  queryParams?: Record<string, string>;
+}): string {
+  const queryParams = input.queryParams ?? {};
+  const endpointPath = pathWithColonParams(input.endpointPath.trim());
+  const serverUrl = input.serverUrl.trim();
+
+  if (endpointPath.startsWith("http://") || endpointPath.startsWith("https://")) {
+    try {
+      const url = new URL(endpointPath);
+      return appendQueryParams(url.toString(), queryParams);
+    } catch {
+      return appendQueryParams(endpointPath, queryParams);
+    }
+  }
+
+  if (!serverUrl) {
+    return appendQueryParams(endpointPath, queryParams);
+  }
+
+  const cleanedBase = serverUrl.replace(/\/$/, "");
+  const path = endpointPath.startsWith("/") ? endpointPath : `/${endpointPath}`;
+  return appendQueryParams(`${cleanedBase}${path}`, queryParams);
+}
+
+export function buildRequestUrl(config: RequestConfig): string {
+  const cleanedBase = config.baseUrl.trim().replace(/\/$/, "");
+  const withPathParams = substitutePathParams(stripUrlQuery(config.endpointPath), config.pathParams);
   const full = `${cleanedBase}${withPathParams}`;
   const query = new URLSearchParams();
 
   Object.entries(config.queryParams).forEach(([key, value]) => {
-    if (value !== "") {
-      query.set(key, value);
-    }
+    query.set(key, value);
   });
 
   const queryString = query.toString();
   return queryString ? `${full}?${queryString}` : full;
 }
 
+export function resolveRequestUrl(input: {
+  serverUrl: string;
+  endpointPath: string;
+  pathParams?: Record<string, string>;
+  queryParams?: Record<string, string>;
+}): string {
+  const pathParams = input.pathParams ?? {};
+  const queryParams = input.queryParams ?? {};
+  const endpointPath = stripUrlQuery(input.endpointPath.trim());
+  const serverUrl = input.serverUrl.trim();
+
+  if (endpointPath.startsWith("http://") || endpointPath.startsWith("https://")) {
+    try {
+      const url = new URL(substitutePathParams(endpointPath, pathParams));
+      for (const [key, value] of Object.entries(queryParams)) {
+        url.searchParams.set(key, value);
+      }
+      return url.toString();
+    } catch {
+      return buildRequestUrl({
+        baseUrl: "",
+        endpointPath,
+        pathParams,
+        queryParams
+      }).replace(/^\?/, "");
+    }
+  }
+
+  if (!serverUrl) {
+    const pathOnly = substitutePathParams(endpointPath, pathParams);
+    const query = new URLSearchParams();
+    Object.entries(queryParams).forEach(([key, value]) => {
+      query.set(key, value);
+    });
+    const queryString = query.toString();
+    return queryString ? `${pathOnly}?${queryString}` : pathOnly;
+  }
+
+  return buildRequestUrl({
+    baseUrl: serverUrl,
+    endpointPath,
+    pathParams,
+    queryParams
+  });
+}
+
 // ─── Parameter scaffolding ──────────────────────────────────────────────────
+
+export function extractPathParamNames(path: string): string[] {
+  const names: string[] = [];
+  for (const match of path.matchAll(/\{([^}]+)\}/g)) {
+    names.push(match[1]);
+  }
+  return names;
+}
 
 function defaultValueForParam(param: OpenApiParameter): string {
   if (param.example !== undefined) return String(param.example);
@@ -95,6 +200,43 @@ export function scaffoldFromParameters(parameters: OpenApiParameter[]): {
   }
 
   return { pathParams, queryParams, headers };
+}
+
+export function scaffoldFromOperation(
+  operation: Pick<OperationItem, "path" | "parameters">
+): {
+  pathParams: Record<string, string>;
+  queryParams: Record<string, string>;
+  headers: Record<string, string>;
+} {
+  const result = scaffoldFromParameters(operation.parameters);
+
+  for (const name of extractPathParamNames(operation.path)) {
+    if (!(name in result.pathParams)) {
+      result.pathParams[name] = "";
+    }
+  }
+
+  return result;
+}
+
+export function mergeParamRecord(
+  current: Record<string, string>,
+  scaffold: Record<string, string>
+): Record<string, string> {
+  const merged: Record<string, string> = {};
+
+  for (const key of Object.keys(scaffold)) {
+    merged[key] = key in current ? current[key] : scaffold[key];
+  }
+
+  for (const [key, value] of Object.entries(current)) {
+    if (!(key in merged)) {
+      merged[key] = value;
+    }
+  }
+
+  return merged;
 }
 
 // ─── Authentication ─────────────────────────────────────────────────────────
