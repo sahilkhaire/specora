@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import type { OperationItem } from "@/features/spec/spec-utils";
 import type { Environment } from "@/features/environments/env-types";
 import type { SavedExchange } from "@/features/collections/collection-types";
 import { SavedExchangesPanel } from "@/features/collections/SavedExchangesPanel";
+import { JsonResponseViewer } from "./JsonResponseViewer";
+import type { AuthSource } from "./auth-source";
 import {
   applyVariables,
   resolveRequestUrl,
@@ -50,6 +52,8 @@ interface TryOutPanelProps {
   onAuthValueChange: (value: string) => void;
   authKeyName: string;
   onAuthKeyNameChange: (value: string) => void;
+  authSource?: AuthSource;
+  onUseEnvAuth?: () => void;
   activeEnv: Environment | null;
   isSending: boolean;
   onSend: () => void;
@@ -92,6 +96,8 @@ export function TryOutPanel({
   onAuthValueChange,
   authKeyName,
   onAuthKeyNameChange,
+  authSource = "env",
+  onUseEnvAuth,
   activeEnv,
   isSending,
   onSend,
@@ -520,6 +526,18 @@ export function TryOutPanel({
 
           {tab === "auth" ? (
             <div className="tryout-auth-panel">
+              {activeEnv ? (
+                <div className="tryout-auth-source">
+                  <span className={`tryout-auth-source-badge${authSource === "env" ? " tryout-auth-source-badge--active" : ""}`}>
+                    {authSource === "env" ? `Using ${activeEnv.name} auth` : "Custom auth"}
+                  </span>
+                  {authSource === "custom" && onUseEnvAuth ? (
+                    <button type="button" className="tryout-ghost-btn" onClick={onUseEnvAuth}>
+                      Use environment auth
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
               <label className="tryout-inline-field">
                 <span>Auth type</span>
                 <select value={authType} onChange={(event) => onAuthTypeChange(event.target.value as AuthType)}>
@@ -629,11 +647,11 @@ export function TryOutPanel({
           </details>
         ) : null}
 
-        <pre
-          className={`tryout-response-body${responseDisplay.placeholder ? " tryout-response-body--placeholder" : ""}`}
-        >
-          {responseDisplay.text}
-        </pre>
+        <JsonResponseViewer
+          body={responseDisplay.text}
+          placeholder={responseDisplay.placeholder}
+          placeholderText={responseDisplay.text}
+        />
           </div>
         </Panel>
       </PanelGroup>

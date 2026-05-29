@@ -24,7 +24,8 @@ import {
   scaffoldFromOperation
 } from "@/features/tryout/tryout-utils";
 import { parseParamRowsToRecord, serializeParamRecord } from "@/features/tryout/param-rows";
-import type { AuthConfig, AuthType } from "@/features/tryout/tryout-utils";
+import { authFieldsForUi, authFromEnvironment, type AuthSource } from "@/features/tryout/auth-source";
+import type { AuthType } from "@/features/tryout/tryout-utils";
 import { TryOutPanel } from "@/features/tryout/TryOutPanel";
 import { useEnvironments } from "@/features/environments/use-environments";
 import { EnvPanel } from "@/features/environments/EnvPanel";
@@ -150,6 +151,7 @@ export function App() {
   const [authType, setAuthType] = useState<AuthType>("none");
   const [authValue, setAuthValue] = useState("");
   const [authKeyName, setAuthKeyName] = useState("X-API-Key");
+  const [authSource, setAuthSource] = useState<AuthSource>("env");
   const [showSpecLoader, setShowSpecLoader] = useState(false);
   const urlInputRef = useRef<HTMLInputElement>(null);
   const specPromptDismissedRef = useRef<Set<string>>(new Set());
@@ -448,12 +450,22 @@ export function App() {
   useEffect(() => {
     if (!activeEnv) return;
     if (activeEnv.baseUrl) setServerUrl(activeEnv.baseUrl);
-    setAuthType(activeEnv.auth.type);
-    setAuthValue(activeEnv.auth.value);
-    setAuthKeyName(activeEnv.auth.keyName);
+    if (authSource !== "env") return;
+    const authFields = authFieldsForUi({ authSource: "env" }, activeEnv);
+    setAuthType(authFields.authType);
+    setAuthValue(authFields.authValue);
+    setAuthKeyName(authFields.authKeyName);
   // Only re-run when the active env ID changes, not on every field edit.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeEnvId]);
+
+  useEffect(() => {
+    if (authSource !== "env" || !activeEnv) return;
+    const authFields = authFieldsForUi({ authSource: "env" }, activeEnv);
+    setAuthType(authFields.authType);
+    setAuthValue(authFields.authValue);
+    setAuthKeyName(authFields.authKeyName);
+  }, [activeEnv?.auth, authSource, activeEnv]);
 
   // When the selected operation changes, auto-scaffold params from the spec definition.
   // We key on the stable string ID so typing in the search box doesn't reset manual edits.
@@ -462,11 +474,18 @@ export function App() {
     if (!selectedOperation) return;
     const { pathParams, queryParams, headers } = scaffoldFromOperation(selectedOperation);
     const fmtParams = (obj: Record<string, string>) => serializeParamRecord(obj);
+    const fmtQueryParams = (obj: Record<string, string>) =>
+      serializeParamRecord(obj, { defaultEnabled: false });
     const fmt = (obj: Record<string, string>) =>
       Object.keys(obj).length > 0 ? JSON.stringify(obj, null, 2) : "{}";
     setPathParamsInput(fmtParams(pathParams));
-    setQueryParamsInput(fmtParams(queryParams));
+    setQueryParamsInput(fmtQueryParams(queryParams));
     setHeadersInput(fmt(headers));
+    setAuthSource("env");
+    const authFields = authFieldsForUi({ authSource: "env" }, activeEnv);
+    setAuthType(authFields.authType);
+    setAuthValue(authFields.authValue);
+    setAuthKeyName(authFields.authKeyName);
   // selectedOperation object reference changes on every search keystroke even for the same op;
   // selectedOpKey is stable — only changes when a genuinely different operation is picked.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -603,7 +622,10 @@ export function App() {
     const method = selectedOperation.method;
     const canSendBody = !["GET", "HEAD"].includes(method);
     const body = canSendBody && requestBody.trim() ? applyVariables(requestBody, vars) : undefined;
-    const authCfg: AuthConfig = { type: authType, value: authValue, keyName: authKeyName };
+    const authCfg =
+      authSource === "custom"
+        ? { type: authType, value: authValue, keyName: authKeyName }
+        : authFromEnvironment(activeEnv);
     const mergedHeaders = applyVars({ ...parsedHeaders.data, ...buildAuthHeaders(authCfg) });
     const start = performance.now();
 
@@ -838,11 +860,28 @@ export function App() {
               requestBody={requestBody}
               onRequestBodyChange={setRequestBody}
               authType={authType}
-              onAuthTypeChange={setAuthType}
+              onAuthTypeChange={(value) => {
+                setAuthSource("custom");
+                setAuthType(value);
+              }}
               authValue={authValue}
-              onAuthValueChange={setAuthValue}
+              onAuthValueChange={(value) => {
+                setAuthSource("custom");
+                setAuthValue(value);
+              }}
               authKeyName={authKeyName}
-              onAuthKeyNameChange={setAuthKeyName}
+              onAuthKeyNameChange={(value) => {
+                setAuthSource("custom");
+                setAuthKeyName(value);
+              }}
+              authSource={authSource}
+              onUseEnvAuth={() => {
+                setAuthSource("env");
+                const fields = authFieldsForUi({ authSource: "env" }, activeEnv);
+                setAuthType(fields.authType);
+                setAuthValue(fields.authValue);
+                setAuthKeyName(fields.authKeyName);
+              }}
               activeEnv={activeEnv}
               isSending={isSending}
               onSend={() => void sendRequest()}

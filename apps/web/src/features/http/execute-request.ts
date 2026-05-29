@@ -1,6 +1,7 @@
 import type { Environment } from "@/features/environments/env-types";
 import type { SavedRequest } from "@/features/collections/collection-types";
 import { fetchViaTryoutProxy } from "@/features/http/proxy-client";
+import { authForRequest } from "@/features/tryout/auth-source";
 import {
   applyVariables,
   buildAuthHeaders,
@@ -37,21 +38,7 @@ export async function executeRequest(options: ExecuteRequestOptions): Promise<Ex
   const queryParams = request.queryParams;
   const extraHeaders = request.headers;
 
-  const envAuth: AuthConfig =
-    authOverride ??
-    (request.authType && request.authType !== "none"
-      ? {
-          type: request.authType,
-          value: request.authValue ?? "",
-          keyName: request.authKeyName ?? "X-API-Key"
-        }
-      : environment
-        ? {
-            type: environment.auth.type,
-            value: environment.auth.value,
-            keyName: environment.auth.keyName
-          }
-        : { type: "none", value: "", keyName: "X-API-Key" });
+  const envAuth = authOverride ?? authForRequest(request, environment);
 
   const baseUrl = applyVariables(serverUrl || environment?.baseUrl || "", environment?.variables ?? {});
   const urlPath = applyVariables(request.url, environment?.variables ?? {});

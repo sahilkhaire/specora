@@ -14,14 +14,14 @@ import {
 import { sampleToJson } from "@/features/schemas/schema-samples";
 import { TryOutPanel } from "@/features/tryout/TryOutPanel";
 import { VariableHighlightInput } from "@/features/tryout/VariableHighlight";
-import { scaffoldFromOperation, parseRecordJson, methodBadgeClass, prettyResponseBody, applyVariables, resolveRequestUrl, resolveDisplayRequestUrl, stripUrlQuery, pathFromColonParams } from "@/features/tryout/tryout-utils";
+import { scaffoldFromOperation, parseRecordJson, methodBadgeClass, prettyResponseBody, applyVariables, resolveRequestUrl, resolveDisplayRequestUrl, stripUrlQuery, pathFromColonParams, type AuthType } from "@/features/tryout/tryout-utils";
 import {
   mergeParamRowsInput,
   parseParamRowsToRecord,
   serializeParamRecord,
   serializeParamRows
 } from "@/features/tryout/param-rows";
-import type { AuthType } from "@/features/tryout/tryout-utils";
+import { authFieldsForUi, type AuthSource } from "@/features/tryout/auth-source";
 import type { Environment } from "@/features/environments/env-types";
 import { AppShell } from "./AppShell";
 import { CollectionSidebar } from "@/features/collections/CollectionSidebar";
@@ -89,6 +89,7 @@ export function ApiClientWorkbench({
   const [authType, setAuthType] = useState<AuthType>("none");
   const [authValue, setAuthValue] = useState("");
   const [authKeyName, setAuthKeyName] = useState("X-API-Key");
+  const [authSource, setAuthSource] = useState<AuthSource>("env");
   const [requestStatus, setRequestStatus] = useState("");
   const [requestResponse, setRequestResponse] = useState("");
   const [requestHeaders, setRequestHeaders] = useState<Record<string, string>>({});
@@ -163,7 +164,11 @@ export function ApiClientWorkbench({
       );
       setQueryParamsInput(
         serializeParamRows(
-          mergeParamRowsInput(serializeParamRecord(selectedRequest.queryParams), scaffold.queryParams)
+          mergeParamRowsInput(
+            serializeParamRecord(selectedRequest.queryParams, { defaultEnabled: true }),
+            scaffold.queryParams,
+            { defaultEnabled: false }
+          )
         )
       );
       setHeadersInput(JSON.stringify(
@@ -175,20 +180,32 @@ export function ApiClientWorkbench({
       ));
     } else {
       setPathParamsInput(serializeParamRecord(selectedRequest.pathParams));
-      setQueryParamsInput(serializeParamRecord(selectedRequest.queryParams));
+      setQueryParamsInput(
+        serializeParamRecord(selectedRequest.queryParams, { defaultEnabled: true })
+      );
       setHeadersInput(JSON.stringify(selectedRequest.headers, null, 2));
     }
     setRequestBody(selectedRequest.body.content);
-    setAuthType(selectedRequest.authType ?? "none");
-    setAuthValue(selectedRequest.authValue ?? "");
-    setAuthKeyName(selectedRequest.authKeyName ?? "X-API-Key");
+    const authFields = authFieldsForUi(selectedRequest, activeEnv);
+    setAuthSource(authFields.authSource);
+    setAuthType(authFields.authType);
+    setAuthValue(authFields.authValue);
+    setAuthKeyName(authFields.authKeyName);
     setRequestStatus("");
     setRequestResponse("");
     setRequestHeaders({});
     setRequestTiming(null);
     setRequestError("");
 
-  }, [selectedRequest?.id, linkedOperation?.key]);
+  }, [selectedRequest?.id, linkedOperation?.key, activeEnv?.id]);
+
+  useEffect(() => {
+    if (authSource !== "env") return;
+    const authFields = authFieldsForUi({ authSource: "env" }, activeEnv);
+    setAuthType(authFields.authType);
+    setAuthValue(authFields.authValue);
+    setAuthKeyName(authFields.authKeyName);
+  }, [activeEnv?.id, activeEnv?.auth, authSource]);
 
   const persistDraft = useCallback(() => {
     if (!selectedRequest) return;
@@ -199,13 +216,15 @@ export function ApiClientWorkbench({
       queryParams: parseParamRowsToRecord(queryParamsInput, paramScaffold?.queryParams),
       headers: parseRecordJson(headersInput),
       body: requestBody ? { mode: "json", content: requestBody } : { mode: "none", content: "" },
-      authType,
-      authValue,
-      authKeyName,
+      authSource,
+      ...(authSource === "custom"
+        ? { authType, authValue, authKeyName }
+        : { authType: undefined, authValue: undefined, authKeyName: undefined }),
       method: selectedRequest.method,
       url: selectedRequest.url
     });
   }, [
+    authSource,
     authKeyName,
     authType,
     authValue,
@@ -217,6 +236,41 @@ export function ApiClientWorkbench({
     paramScaffold,
     updateRequest
   ]);
+
+  const markAuthCustom = useCallback(() => {
+    setAuthSource("custom");
+  }, []);
+
+  const handleAuthTypeChange = useCallback((value: AuthType) => {
+    markAuthCustom();
+    setAuthType(value);
+  }, [markAuthCustom]);
+
+  const handleAuthValueChange = useCallback((value: string) => {
+    markAuthCustom();
+    setAuthValue(value);
+  }, [markAuthCustom]);
+
+  const handleAuthKeyNameChange = useCallback((value: string) => {
+    markAuthCustom();
+    setAuthKeyName(value);
+  }, [markAuthCustom]);
+
+  const handleUseEnvAuth = useCallback(() => {
+    setAuthSource("env");
+    const authFields = authFieldsForUi({ authSource: "env" }, activeEnv);
+    setAuthType(authFields.authType);
+    setAuthValue(authFields.authValue);
+    setAuthKeyName(authFields.authKeyName);
+    if (selectedRequest) {
+      updateRequest(selectedRequest.id, {
+        authSource: "env",
+        authType: undefined,
+        authValue: undefined,
+        authKeyName: undefined
+      });
+    }
+  }, [activeEnv, selectedRequest, updateRequest]);
 
   const sendRequest = useCallback(async () => {
     if (!selectedRequest) return;
@@ -232,9 +286,10 @@ export function ApiClientWorkbench({
       body: requestBody.trim()
         ? { mode: "json", content: requestBody }
         : { mode: "none", content: "" },
-      authType,
-      authValue,
-      authKeyName
+      authSource,
+      ...(authSource === "custom"
+        ? { authType, authValue, authKeyName }
+        : { authType: undefined, authValue: undefined, authKeyName: undefined })
     };
 
     setIsSending(true);
@@ -280,6 +335,7 @@ export function ApiClientWorkbench({
   }, [
     activeEnv,
     authKeyName,
+    authSource,
     authType,
     authValue,
     history,
@@ -330,9 +386,10 @@ export function ApiClientWorkbench({
           body: requestBody
             ? { mode: "json", content: requestBody }
             : { mode: "none", content: "" },
-          authType,
-          authValue,
-          authKeyName
+          authSource,
+          ...(authSource === "custom"
+            ? { authType, authValue, authKeyName }
+            : { authType: undefined, authValue: undefined, authKeyName: undefined })
         },
         response: {
           status: requestStatus ? Number(requestStatus) : undefined,
@@ -348,6 +405,7 @@ export function ApiClientWorkbench({
     },
     [
       addExchange,
+      authSource,
       authKeyName,
       authType,
       authValue,
@@ -374,17 +432,35 @@ export function ApiClientWorkbench({
           serializeParamRows(mergeParamRowsInput(serializeParamRecord(snap.pathParams), scaffold.pathParams))
         );
         setQueryParamsInput(
-          serializeParamRows(mergeParamRowsInput(serializeParamRecord(snap.queryParams), scaffold.queryParams))
+          serializeParamRows(
+            mergeParamRowsInput(
+              serializeParamRecord(snap.queryParams, { defaultEnabled: true }),
+              scaffold.queryParams,
+              { defaultEnabled: false }
+            )
+          )
         );
       } else {
         setPathParamsInput(serializeParamRecord(snap.pathParams));
-        setQueryParamsInput(serializeParamRecord(snap.queryParams));
+        setQueryParamsInput(serializeParamRecord(snap.queryParams, { defaultEnabled: true }));
       }
       setHeadersInput(JSON.stringify(snap.headers, null, 2));
       setRequestBody(snap.body.content);
-      setAuthType(snap.authType ?? "none");
-      setAuthValue(snap.authValue ?? "");
-      setAuthKeyName(snap.authKeyName ?? "X-API-Key");
+      const loadedAuthSource =
+        snap.authSource ?? (snap.authType && snap.authType !== "none" ? "custom" : "env");
+      const authFields = authFieldsForUi(
+        {
+          authSource: loadedAuthSource,
+          authType: snap.authType,
+          authValue: snap.authValue,
+          authKeyName: snap.authKeyName
+        },
+        activeEnv
+      );
+      setAuthSource(authFields.authSource);
+      setAuthType(authFields.authType);
+      setAuthValue(authFields.authValue);
+      setAuthKeyName(authFields.authKeyName);
       setRequestStatus(String(exchange.response.status ?? ""));
       setRequestTiming(exchange.response.durationMs);
       setRequestHeaders(exchange.response.headers);
@@ -399,15 +475,24 @@ export function ApiClientWorkbench({
           queryParams: snap.queryParams,
           headers: snap.headers,
           body: snap.body,
-          authType: snap.authType,
-          authValue: snap.authValue,
-          authKeyName: snap.authKeyName
+          authSource: loadedAuthSource,
+          ...(loadedAuthSource === "custom"
+            ? {
+                authType: snap.authType,
+                authValue: snap.authValue,
+                authKeyName: snap.authKeyName
+              }
+            : {
+                authType: undefined,
+                authValue: undefined,
+                authKeyName: undefined
+              })
         });
       }
 
       toast.success("Loaded saved request and response");
     },
-    [linkedOperation, selectedRequest, updateRequest]
+    [activeEnv, linkedOperation, selectedRequest, updateRequest]
   );
 
   const handleDeleteExchange = useCallback(
@@ -624,11 +709,13 @@ export function ApiClientWorkbench({
                   requestBody={requestBody}
                   onRequestBodyChange={setRequestBody}
                   authType={authType}
-                  onAuthTypeChange={setAuthType}
+                  onAuthTypeChange={handleAuthTypeChange}
                   authValue={authValue}
-                  onAuthValueChange={setAuthValue}
+                  onAuthValueChange={handleAuthValueChange}
                   authKeyName={authKeyName}
-                  onAuthKeyNameChange={setAuthKeyName}
+                  onAuthKeyNameChange={handleAuthKeyNameChange}
+                  authSource={authSource}
+                  onUseEnvAuth={handleUseEnvAuth}
                   activeEnv={activeEnv}
                   isSending={isSending}
                   onSend={() => void sendRequest()}

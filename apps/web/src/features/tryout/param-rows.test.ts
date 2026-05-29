@@ -38,12 +38,12 @@ describe("param-rows", () => {
       serializeParamRows([{ id: "1", key: "userId", value: "99", enabled: true }]),
       { userId: "1", page: "0", limit: "20" }
     );
-    expect(paramRowsToRecord(rows)).toEqual({ userId: "99", page: "0", limit: "20" });
+    expect(paramRowsToRecord(rows)).toEqual({ userId: "99" });
   });
 
-  it("parseParamRowsToRecord applies scaffold defaults", () => {
+  it("parseParamRowsToRecord applies scaffold defaults as disabled", () => {
     const record = parseParamRowsToRecord("{}", { id: "123", active: "false" });
-    expect(record).toEqual({ id: "123", active: "false" });
+    expect(record).toEqual({});
   });
 
   it("path params ignore disabled flag when respectEnabled is false", () => {

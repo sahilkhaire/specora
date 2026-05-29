@@ -7,28 +7,38 @@ export interface ParamRow {
   enabled: boolean;
 }
 
+export interface ParamRowOptions {
+  /** Default enabled state for new rows (query params: false). */
+  defaultEnabled?: boolean;
+}
+
 export function newParamRow(
-  partial?: Partial<Pick<ParamRow, "id" | "key" | "value" | "enabled">>
+  partial?: Partial<Pick<ParamRow, "id" | "key" | "value" | "enabled">>,
+  options: ParamRowOptions = {}
 ): ParamRow {
+  const defaultEnabled = options.defaultEnabled ?? true;
   return {
     id: partial?.id ?? `p_${crypto.randomUUID().slice(0, 8)}`,
     key: partial?.key ?? "",
     value: partial?.value ?? "",
-    enabled: partial?.enabled ?? true
+    enabled: partial?.enabled ?? defaultEnabled
   };
 }
 
-export function recordToParamRows(record: Record<string, string>): ParamRow[] {
+export function recordToParamRows(
+  record: Record<string, string>,
+  options: ParamRowOptions = {}
+): ParamRow[] {
   const rows = Object.entries(record).map(([key, value]) =>
-    newParamRow({ key, value, enabled: true })
+    newParamRow({ key, value }, options)
   );
-  return rows.length > 0 ? rows : [newParamRow()];
+  return rows.length > 0 ? rows : [newParamRow(undefined, options)];
 }
 
-export function parseParamRowsInput(value: string): ParamRow[] {
+export function parseParamRowsInput(value: string, options: ParamRowOptions = {}): ParamRow[] {
   const trimmed = value.trim();
   if (!trimmed || trimmed === "{}") {
-    return [newParamRow()];
+    return [newParamRow(undefined, options)];
   }
 
   try {
@@ -37,7 +47,7 @@ export function parseParamRowsInput(value: string): ParamRow[] {
     if (Array.isArray(parsed)) {
       const rows = parsed.map((item) => {
         if (!item || typeof item !== "object" || Array.isArray(item)) {
-          return newParamRow();
+          return newParamRow(undefined, options);
         }
         const row = item as Record<string, unknown>;
         return newParamRow({
@@ -45,23 +55,24 @@ export function parseParamRowsInput(value: string): ParamRow[] {
           key: String(row.key ?? ""),
           value: String(row.value ?? ""),
           enabled: row.enabled !== false
-        });
+        }, options);
       });
-      return rows.length > 0 ? rows : [newParamRow()];
+      return rows.length > 0 ? rows : [newParamRow(undefined, options)];
     }
 
     if (parsed && typeof parsed === "object") {
       return recordToParamRows(
         Object.fromEntries(
           Object.entries(parsed as Record<string, unknown>).map(([key, val]) => [key, String(val)])
-        )
+        ),
+        options
       );
     }
   } catch {
     /* fall through */
   }
 
-  return [newParamRow()];
+  return [newParamRow(undefined, options)];
 }
 
 export function serializeParamRows(rows: ParamRow[]): string {
@@ -104,8 +115,13 @@ function rowIdForKey(key: string, currentRows: ParamRow[], usedIds: Set<string>)
   return id;
 }
 
-export function mergeParamRowsInput(value: string, scaffold: Record<string, string>): ParamRow[] {
-  const currentRows = parseParamRowsInput(value);
+export function mergeParamRowsInput(
+  value: string,
+  scaffold: Record<string, string>,
+  options: ParamRowOptions = {}
+): ParamRow[] {
+  const defaultEnabled = options.defaultEnabled ?? false;
+  const currentRows = parseParamRowsInput(value, options);
   const enabledByKey = new Map<string, boolean>();
   const usedIds = new Set<string>();
 
@@ -126,16 +142,16 @@ export function mergeParamRowsInput(value: string, scaffold: Record<string, stri
         id: rowIdForKey(key, currentRows, usedIds),
         key,
         value: merged[key] ?? "",
-        enabled: enabledByKey.has(key) ? enabledByKey.get(key)! : true
-      })
+        enabled: enabledByKey.has(key) ? enabledByKey.get(key)! : defaultEnabled
+      }, options)
     ),
     ...extraKeys.map((key) =>
       newParamRow({
         id: rowIdForKey(key, currentRows, usedIds),
         key,
         value: merged[key] ?? "",
-        enabled: enabledByKey.has(key) ? enabledByKey.get(key)! : true
-      })
+        enabled: enabledByKey.has(key) ? enabledByKey.get(key)! : defaultEnabled
+      }, options)
     )
   ];
 
@@ -146,18 +162,23 @@ export function mergeParamRowsInput(value: string, scaffold: Record<string, stri
     }
   }
 
-  return rows.length > 0 ? rows : [newParamRow()];
+  return rows.length > 0 ? rows : [newParamRow(undefined, options)];
 }
 
 export function parseParamRowsToRecord(
   value: string,
   scaffold?: Record<string, string>,
-  options: ParamRowsToRecordOptions = {}
+  options: ParamRowsToRecordOptions & ParamRowOptions = {}
 ): Record<string, string> {
-  const rows = scaffold ? mergeParamRowsInput(value, scaffold) : parseParamRowsInput(value);
+  const rows = scaffold
+    ? mergeParamRowsInput(value, scaffold, options)
+    : parseParamRowsInput(value, options);
   return paramRowsToRecord(rows, options);
 }
 
-export function serializeParamRecord(record: Record<string, string>): string {
-  return serializeParamRows(recordToParamRows(record));
+export function serializeParamRecord(
+  record: Record<string, string>,
+  options: ParamRowOptions = {}
+): string {
+  return serializeParamRows(recordToParamRows(record, options));
 }

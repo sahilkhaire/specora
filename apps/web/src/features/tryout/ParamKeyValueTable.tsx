@@ -24,10 +24,11 @@ function deriveRows(
   schemaParams: Record<string, string> | undefined,
   enableToggle: boolean
 ): ParamRow[] {
+  const rowOptions = { defaultEnabled: enableToggle ? false : true };
   const base =
     schemaParams && Object.keys(schemaParams).length > 0
-      ? mergeParamRowsInput(value, schemaParams)
-      : parseParamRowsInput(value);
+      ? mergeParamRowsInput(value, schemaParams, rowOptions)
+      : parseParamRowsInput(value, rowOptions);
   if (!enableToggle) {
     return base.map((row) => ({ ...row, enabled: true }));
   }

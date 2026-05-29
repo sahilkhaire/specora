@@ -32,6 +32,8 @@ export interface SavedRequest {
   authType?: AuthType;
   authValue?: string;
   authKeyName?: string;
+  /** When "env" (default), request uses active environment auth unless overridden. */
+  authSource?: "env" | "custom";
   description?: string;
   updatedAt: string;
 }
@@ -46,6 +48,8 @@ export interface SavedExchangeRequestSnapshot {
   authType?: AuthType;
   authValue?: string;
   authKeyName?: string;
+  /** When "env" (default), request uses active environment auth unless overridden. */
+  authSource?: "env" | "custom";
 }
 
 export interface SavedExchangeResponse {
