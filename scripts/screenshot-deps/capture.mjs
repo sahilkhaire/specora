@@ -23,6 +23,8 @@ async function prepareDemoWorkspace(page) {
   await page.evaluate(() => {
     localStorage.clear();
     localStorage.setItem("specora-theme-mode", "light");
+    localStorage.setItem("specora:panel:schema", "true");
+    localStorage.setItem("specora:panel:history", "false");
   });
   await page.reload({ waitUntil: "domcontentloaded" });
 
@@ -41,17 +43,90 @@ async function waitForSpecLoaded(page) {
   await page.waitForFunction(
     () => {
       const title = document.querySelector(".app-top-header-api-title");
-      return title && /petstore|swagger/i.test(title.textContent ?? "");
+      const workbench = document.querySelector(".main-panel-client, .collection-sidebar");
+      const titleReady = title && /petstore|swagger/i.test(title.textContent ?? "");
+      return titleReady || Boolean(workbench);
     },
-    { timeout: 25000 }
+    { timeout: 45000 }
   );
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(1000);
 }
 
 async function capture(name, page, options = {}) {
   const path = join(outDir, name);
   await page.screenshot({ path, ...options });
   console.log(`Wrote ${path}`);
+}
+
+async function selectPetstoreRequest(page, labelPattern) {
+  const row = page.locator(".collection-tree-request").filter({ hasText: labelPattern }).first();
+  if (await row.count()) {
+    await row.click();
+    await page.waitForTimeout(500);
+    return true;
+  }
+  return false;
+}
+
+async function mockPetstoreResponse(page) {
+  const sample = [
+    {
+      id: 1,
+      category: { id: 1, name: "Dogs" },
+      name: "doggie",
+      photoUrls: ["https://example.com/dog.jpg"],
+      tags: [{ id: 1, name: "friendly" }],
+      status: "available",
+    },
+    {
+      id: 2,
+      name: "fluffy",
+      photoUrls: [],
+      tags: [],
+      status: "pending",
+    },
+  ];
+
+  await page.route("**/petstore.swagger.io/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(sample),
+    });
+  });
+}
+
+async function sendSampleRequest(page) {
+  const serverInput = page.locator(".request-url-input, .tryout-url-input").first();
+  if (await serverInput.count()) {
+    await serverInput.fill("https://petstore.swagger.io/v2");
+  }
+
+  await page.getByRole("tab", { name: "Params" }).click();
+  const statusCheckbox = page
+    .locator(".param-kv-table")
+    .filter({ hasText: "Query params" })
+    .locator(".param-kv-col-enable input")
+    .first();
+  if (await statusCheckbox.count()) {
+    if (!(await statusCheckbox.isChecked())) {
+      await statusCheckbox.check();
+    }
+    const valueInput = page
+      .locator(".param-kv-table")
+      .filter({ hasText: "Query params" })
+      .locator(".param-kv-input")
+      .nth(1);
+    if (await valueInput.count()) {
+      await valueInput.fill("available");
+    }
+  }
+
+  const sendButton = page.locator(".request-send-btn, .tryout-send-btn").first();
+  await sendButton.click();
+
+  await page.waitForSelector(".json-viewer-tree", { timeout: 20000 });
+  await page.waitForTimeout(600);
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -67,11 +142,9 @@ try {
 
   const workbenchReady = await page.locator(".main-panel-client").count();
   if (workbenchReady > 0) {
-    const getPet = page.getByText("Finds Pets by status", { exact: false }).first();
-    if (await getPet.count()) {
-      await getPet.click();
-      await page.waitForTimeout(600);
-    }
+    await selectPetstoreRequest(page, /finds pets by status/i);
+
+    await mockPetstoreResponse(page);
 
     await capture("ui-overview.png", page);
 
@@ -83,6 +156,23 @@ try {
     const insightPanel = page.locator(".operation-insight-panel").first();
     if (await insightPanel.count()) {
       await capture("ui-schemas.png", page, { clip: await insightPanel.boundingBox() });
+    }
+
+    await sendSampleRequest(page);
+
+    const responsePanel = page.locator(".tryout-split-response").first();
+    if (await responsePanel.count()) {
+      const box = await responsePanel.boundingBox();
+      if (box) {
+        await capture("ui-response-viewer.png", page, { clip: box });
+      }
+    }
+
+    const workbenchWithResponse = page.locator(".main-panel-client").first();
+    if (await workbenchWithResponse.count()) {
+      await capture("ui-tryout-response.png", page, {
+        clip: await workbenchWithResponse.boundingBox(),
+      });
     }
   } else {
     await capture("ui-overview.png", page);

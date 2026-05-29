@@ -13,6 +13,7 @@ import (
 type embedManifest struct {
 	Version   string `json:"version"`
 	IndexHTML string `json:"indexHtml"`
+	BuiltAt   string `json:"builtAt,omitempty"`
 }
 
 type embedUI struct {
@@ -23,6 +24,29 @@ type embedUI struct {
 
 func (c Config) specURL(mount string) string {
 	return mount + "/openapi.json"
+}
+
+func (c Config) downloadJSONURL(mount string) string {
+	return c.specURL(mount)
+}
+
+func (c Config) downloadYAMLURL(mount string) string {
+	if isYamlSpecPath(c.SpecPath) {
+		return mount + "/openapi.yaml"
+	}
+	return ""
+}
+
+func isYamlSpecPath(path string) bool {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return false
+	}
+	if i := strings.Index(trimmed, "?"); i >= 0 {
+		trimmed = trimmed[:i]
+	}
+	lower := strings.ToLower(trimmed)
+	return strings.HasSuffix(lower, ".yaml") || strings.HasSuffix(lower, ".yml")
 }
 
 func (c Config) fetchEmbedHTML(mount string) (string, error) {

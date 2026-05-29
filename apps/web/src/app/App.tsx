@@ -317,12 +317,20 @@ export function App() {
   ]);
 
   useEffect(() => {
+    const specFromEmbed = Boolean(embedConfig?.specUrl);
+
     if (!activeWorkspace) {
       prevWorkspaceIdRef.current = "";
-      setSpec(null);
-      setRawInput("");
-      setUrlInput("");
-      setError("");
+      if (!specFromEmbed) {
+        setSpec(null);
+        setRawInput("");
+        setUrlInput("");
+        setError("");
+      }
+      return;
+    }
+
+    if (specFromEmbed) {
       return;
     }
 
@@ -366,7 +374,7 @@ export function App() {
 
     setRawInput(activeWorkspace.specSource.value);
     setUrlInput("");
-  }, [activeWorkspaceId, activeWorkspace, clearSelectedOperation]);
+  }, [activeWorkspaceId, activeWorkspace, clearSelectedOperation, embedConfig?.specUrl]);
 
   const operations = useMemo(() => {
     if (!spec) return [];
@@ -375,7 +383,7 @@ export function App() {
       return filterPublicOperations(all, spec);
     }
     return all;
-  }, [spec]);
+  }, [spec, embedConfig?.includeAll]);
   const filteredOperations = useMemo(() => filterOperations(operations, methodFilter, searchTerm), [operations, searchTerm, methodFilter]);
 
   const selectedOperation = useMemo(() => {

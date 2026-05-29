@@ -20,6 +20,16 @@ func TestHandlerEmbedFromDir(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte(indexHTML), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	assetsDir := filepath.Join(dir, "assets")
+	if err := os.Mkdir(assetsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(assetsDir, "index.js"), []byte("console.log('ok');"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(assetsDir, "index.css"), []byte("body{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	specPath := filepath.Join(dir, "openapi.json")
 	if err := os.WriteFile(specPath, []byte(`{
@@ -47,11 +57,27 @@ func TestHandlerEmbedFromDir(t *testing.T) {
 	if !contains(body, "__SPECORA_EMBED__") {
 		t.Fatalf("expected embed config injection, got %s", body)
 	}
-	if !contains(body, `/api-docs/_assets/`) {
-		t.Fatalf("expected rewritten asset URLs under mount, got %s", body)
+	if !contains(body, `"downloadJsonUrl":"/api-docs/openapi.json"`) {
+		t.Fatalf("expected downloadJsonUrl in embed config, got %s", body)
+	}
+	if !contains(body, `/api-docs/_assets/index.js`) {
+		t.Fatalf("expected rewritten asset URL without duplicate assets/, got %s", body)
+	}
+	if contains(body, `/api-docs/_assets/assets/`) {
+		t.Fatalf("expected no duplicate assets/ segment, got %s", body)
 	}
 	if contains(body, `src="/assets/`) {
 		t.Fatalf("expected no root-absolute /assets/ paths, got %s", body)
+	}
+
+	assetReq := httptest.NewRequest(http.MethodGet, "/api-docs/_assets/index.css", nil)
+	assetRec := httptest.NewRecorder()
+	handler.ServeHTTP(assetRec, assetReq)
+	if assetRec.Code != http.StatusOK {
+		t.Fatalf("expected asset 200, got %d body=%s", assetRec.Code, assetRec.Body.String())
+	}
+	if ct := assetRec.Header().Get("Content-Type"); !contains(ct, "text/css") {
+		t.Fatalf("expected text/css content type, got %q", ct)
 	}
 }
 

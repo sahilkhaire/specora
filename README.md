@@ -12,19 +12,31 @@ Screenshots use the official [Swagger Petstore](https://petstore.swagger.io/) sp
 
 ### API client workbench
 
-Browse endpoints by tag, send requests, and inspect responses — collections, try-out, and schema reference in one view.
+Browse endpoints by tag, send requests, and inspect responses — collections, try-out, schema reference, and saved exchanges in one view.
 
 ![Specora API client with Swagger Petstore](docs/images/ui-overview.png)
 
 ### Try it out
 
-Configure path/query params, headers, body, and auth, then send requests against your base URL.
+Configure path/query params (enabled per row), headers, body, and environment auth, then send requests against your base URL.
 
 ![Try it out panel](docs/images/ui-tryout.png)
 
+### Live response viewer
+
+JSON responses are searchable, collapsible, and syntax-colored. Save request/response pairs per endpoint for reuse later.
+
+![JSON response viewer with search and expand/collapse](docs/images/ui-response-viewer.png)
+
+### Request + response
+
+Split request editor and response panel in the embedded API client workbench.
+
+![Try it out with live JSON response](docs/images/ui-tryout-response.png)
+
 ### Schema reference
 
-Operation insight panel shows parameters, payload templates, and response structure from the OpenAPI definition.
+Operation insight panel shows parameters, payload templates, and response structure from the OpenAPI definition. Toggle the schema panel from the header or collection sidebar.
 
 ![Schema and response reference](docs/images/ui-schemas.png)
 

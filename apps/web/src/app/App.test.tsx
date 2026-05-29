@@ -130,16 +130,40 @@ describe("App", () => {
   });
 
   it("hides workspace and import actions in SDK embed context", async () => {
+    const petstoreFixture = `
+openapi: 3.0.3
+info:
+  title: UI Test API
+  version: 1.0.0
+paths:
+  /pets:
+    get:
+      summary: List pets
+      tags: [pets]
+      responses:
+        "200":
+          description: ok
+`;
+
     window.__SPECORA_EMBED__ = {
       specUrl: "/api-docs/openapi.json",
       downloadJsonUrl: "/api-docs/openapi.json",
       downloadYamlUrl: "/api-docs/openapi.yaml",
+      includeAll: true,
     };
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(petstoreFixture, { status: 200, headers: { "Content-Type": "application/yaml" } })
+    );
 
     renderApp();
 
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: /Default Workspace/i })).not.toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /List pets/i })).toBeInTheDocument();
     });
 
     expect(

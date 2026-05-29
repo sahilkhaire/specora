@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -47,11 +48,23 @@ func Handler(cfg Config) http.Handler {
 
 	mux.HandleFunc(mount+"/openapi.json", serveSpec)
 
+	if yamlURL := cfg.downloadYAMLURL(mount); yamlURL != "" && !isRemoteSpecPath(cfg.SpecPath) {
+		mux.HandleFunc(mount+"/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
+			raw, err := os.ReadFile(cfg.SpecPath)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+			_, _ = w.Write(raw)
+		})
+	}
+
 	if assetsDir := cfg.localAssetsDir(); assetsDir != "" {
 		if info, err := os.Stat(assetsDir); err == nil && info.IsDir() {
 			mux.Handle(
 				mount+"/_assets/",
-				http.StripPrefix(mount+"/_assets/", http.FileServer(http.Dir(assetsDir))),
+				noCache(http.StripPrefix(mount+"/_assets/", http.FileServer(http.Dir(assetsDir)))),
 			)
 		}
 	}
@@ -71,6 +84,9 @@ func Handler(cfg Config) http.Handler {
 		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if cfg.embedDir() != "" {
+			w.Header().Set("Cache-Control", "no-store")
+		}
 		_, _ = w.Write([]byte(ui.html))
 	})
 
@@ -83,6 +99,18 @@ func Handler(cfg Config) http.Handler {
 	})
 
 	return mux
+}
+
+func noCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isRemoteSpecPath(path string) bool {
+	trimmed := strings.TrimSpace(path)
+	return strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://")
 }
 
 func fallbackHTML(mount string, err error) string {

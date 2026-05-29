@@ -8,17 +8,17 @@ import (
 
 // rewriteEmbedAssetURLs points /assets/* at the CDN or at {mount}/_assets/ when using EmbedDir.
 func rewriteEmbedAssetURLs(html, mount string, c Config) string {
-	prefix := c.assetURLPrefix(mount)
+	if c.embedDir() != "" {
+		localPrefix := mount + "/_assets/"
+		html = strings.ReplaceAll(html, `src="/assets/`, `src="`+localPrefix)
+		html = strings.ReplaceAll(html, `href="/assets/`, `href="`+localPrefix)
+		return html
+	}
+
+	prefix := c.cdnVersionedBase() + "/"
 	html = strings.ReplaceAll(html, `src="/assets/`, `src="`+prefix+`assets/`)
 	html = strings.ReplaceAll(html, `href="/assets/`, `href="`+prefix+`assets/`)
 	return html
-}
-
-func (c Config) assetURLPrefix(mount string) string {
-	if c.embedDir() != "" {
-		return mount + "/_assets/"
-	}
-	return c.cdnVersionedBase() + "/"
 }
 
 func (c Config) cdnVersionedBase() string {

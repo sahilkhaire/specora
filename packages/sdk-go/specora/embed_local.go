@@ -45,15 +45,20 @@ func (c Config) loadEmbedFromDir(dir, mount string) (string, error) {
 }
 
 func injectEmbedConfig(indexHTML string, c Config, mount string) (string, error) {
+	specURL := c.specURL(mount)
 	cfg := map[string]any{
-		"surface":      "embed",
-		"specUrl":      c.specURL(mount),
-		"mountPath":    mount,
-		"publicFilter": c.PublicFilter,
-		"includeAll":   c.IncludeAll,
+		"surface":         "embed",
+		"specUrl":         specURL,
+		"mountPath":       mount,
+		"publicFilter":    c.PublicFilter,
+		"includeAll":      c.IncludeAll,
+		"downloadJsonUrl": c.downloadJSONURL(mount),
 	}
 	if c.PublicFilter == "" && !c.IncludeAll {
 		cfg["publicFilter"] = "tag:public"
+	}
+	if yamlURL := c.downloadYAMLURL(mount); yamlURL != "" {
+		cfg["downloadYamlUrl"] = yamlURL
 	}
 
 	cfgJSON, err := json.Marshal(cfg)
