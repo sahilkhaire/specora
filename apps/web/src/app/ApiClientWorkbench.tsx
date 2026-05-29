@@ -40,6 +40,7 @@ import {
 import type { WorkbenchHeaderConfig } from "@/app/header-types";
 import { executeRequest } from "@/features/http/execute-request";
 import { useDataContext } from "@/data/DataProvider";
+import { isSdkEmbeddedContext } from "@/config/deployment";
 
 interface ApiClientWorkbenchProps {
   workspaceId: string;
@@ -68,6 +69,7 @@ export function ApiClientWorkbench({
   onProxyUrlChange,
   activeEnv
 }: ApiClientWorkbenchProps) {
+  const embedded = isSdkEmbeddedContext();
   const { stores } = useDataContext();
   const {
     state: collectionState,
@@ -81,6 +83,21 @@ export function ApiClientWorkbench({
     removeExchange,
     exchangesForSelected
   } = useCollections(workspaceId, spec);
+
+  const patchRequest = useCallback(
+    (id: string, patch: Partial<SavedRequest>) => {
+      if (embedded && "method" in patch) {
+        const { method: _method, ...rest } = patch;
+        if (Object.keys(rest).length === 0) {
+          return;
+        }
+        updateRequest(id, rest);
+        return;
+      }
+      updateRequest(id, patch);
+    },
+    [embedded, updateRequest]
+  );
 
   const [pathParamsInput, setPathParamsInput] = useState("{}");
   const [queryParamsInput, setQueryParamsInput] = useState("{}");
@@ -627,6 +644,7 @@ export function ApiClientWorkbench({
             onImportPostman={() => setPostmanOpen(true)}
             schemaPanelOpen={schemaPanelOpen}
             onToggleSchemaPanel={toggleSchemaPanel}
+            showCollectionActions={!embedded}
           />
         }
         main={
@@ -635,20 +653,29 @@ export function ApiClientWorkbench({
               <>
                 <div className="request-url-stack">
                   <div className="request-command-bar">
-                    <select
-                      className={`request-method-select ${methodBadgeClass(selectedRequest.method)}`}
-                      value={selectedRequest.method}
-                      onChange={(e) =>
-                        updateRequest(selectedRequest.id, { method: e.target.value })
-                      }
-                      aria-label="HTTP method"
-                    >
-                      {["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
+                    {embedded ? (
+                      <span
+                        className={`request-method-badge ${methodBadgeClass(selectedRequest.method)}`}
+                        aria-label={`HTTP method ${selectedRequest.method}`}
+                      >
+                        {selectedRequest.method}
+                      </span>
+                    ) : (
+                      <select
+                        className={`request-method-select ${methodBadgeClass(selectedRequest.method)}`}
+                        value={selectedRequest.method}
+                        onChange={(e) =>
+                          patchRequest(selectedRequest.id, { method: e.target.value })
+                        }
+                        aria-label="HTTP method"
+                      >
+                        {["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <VariableHighlightInput
                       className="request-url-input"
                       value={displayUrl || selectedRequest.url}

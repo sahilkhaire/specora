@@ -13,7 +13,14 @@ import {
   operationKey,
   setOperationKeyInLocation
 } from "@/features/spec/spec-utils";
-import { deploymentConfig, isEmbedSurface, isFullAppSurface } from "@/config/deployment";
+import {
+  deploymentConfig,
+  getSpecoraEmbedConfig,
+  isEmbedSurface,
+  isFullAppSurface,
+  isSdkEmbeddedContext,
+  showImportSpec as canImportSpec
+} from "@/config/deployment";
 import {
   applyVariables,
   resolveRequestUrl,
@@ -35,18 +42,6 @@ import { ApiClientWorkbench } from "@/app/ApiClientWorkbench";
 import { AppHeader } from "@/app/AppHeader";
 import type { WorkbenchHeaderConfig } from "@/app/header-types";
 import { fetchViaTryoutProxy } from "@/features/http/proxy-client";
-
-declare global {
-  interface Window {
-    __SPECORA_EMBED__?: {
-      surface?: string;
-      specUrl?: string;
-      mountPath?: string;
-      publicFilter?: string;
-      includeAll?: boolean;
-    };
-  }
-}
 
 type LoadMode = "url" | "upload" | "paste";
 type ThemeMode = "light" | "dark" | "system";
@@ -161,10 +156,14 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [workbenchHeader, setWorkbenchHeader] = useState<WorkbenchHeaderConfig | null>(null);
   const showTryOut = !isEmbedSurface();
-  const showImportSpec = isFullAppSurface() && !window.__SPECORA_EMBED__?.specUrl;
+  const allowImportSpec = canImportSpec();
+  const embedConfig = getSpecoraEmbedConfig();
+  const sdkDownloadUrls = embedConfig?.specUrl
+    ? { json: embedConfig.downloadJsonUrl, yaml: embedConfig.downloadYamlUrl }
+    : undefined;
 
   useEffect(() => {
-    const specUrl = window.__SPECORA_EMBED__?.specUrl;
+    const specUrl = embedConfig?.specUrl;
     if (!specUrl) {
       return;
     }
@@ -248,7 +247,7 @@ export function App() {
   } = useWorkspaces();
 
   const needsSpecImport =
-    isFullAppSurface() && showImportSpec && Boolean(activeWorkspace) && !activeWorkspace?.spec;
+    allowImportSpec && Boolean(activeWorkspace) && !activeWorkspace?.spec;
 
   function closeSpecLoader() {
     if (needsSpecImport && activeWorkspace) {
@@ -265,7 +264,7 @@ export function App() {
   }
 
   useEffect(() => {
-    if (!isFullAppSurface() || !showImportSpec || !workspacesHydrated || !activeWorkspace) {
+    if (!allowImportSpec || !workspacesHydrated || !activeWorkspace) {
       return;
     }
 
@@ -372,7 +371,7 @@ export function App() {
   const operations = useMemo(() => {
     if (!spec) return [];
     const all = extractOperations(spec);
-    if (isEmbedSurface() && !window.__SPECORA_EMBED__?.includeAll) {
+    if (isEmbedSurface() && !embedConfig?.includeAll) {
       return filterPublicOperations(all, spec);
     }
     return all;
@@ -688,12 +687,14 @@ export function App() {
         onDeleteWorkspace={deleteWorkspace}
         activeEnvName={activeEnv?.name}
         onOpenEnvironment={() => setIsEnvPanelOpen(true)}
-        onImportSpec={showImportSpec ? openSpecLoader : undefined}
+        onImportSpec={allowImportSpec ? openSpecLoader : undefined}
         onOpenSettings={() => setShowSettings(true)}
         themeMode={themeMode}
         onThemeModeChange={setThemeMode}
-        showImportSpec={showImportSpec}
+        showImportSpec={allowImportSpec}
+        sdkDownloadUrls={sdkDownloadUrls}
         workbench={useApiClient ? workbenchHeader : null}
+        showExportPostman={!isSdkEmbeddedContext()}
       />
 
       <div className="app-body">

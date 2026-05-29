@@ -83,3 +83,46 @@ export function isHostedApp(): boolean {
     (deploymentConfig.mode === "saas" || deploymentConfig.mode === "enterprise")
   );
 }
+
+export interface SpecoraEmbedConfig {
+  surface?: string;
+  specUrl?: string;
+  mountPath?: string;
+  publicFilter?: string;
+  includeAll?: boolean;
+  /** Backend URL for canonical JSON spec download (SDK only). */
+  downloadJsonUrl?: string;
+  /** Backend URL for canonical YAML spec download (SDK only). */
+  downloadYamlUrl?: string;
+}
+
+declare global {
+  interface Window {
+    __SPECORA_EMBED__?: SpecoraEmbedConfig;
+  }
+}
+
+export function getSpecoraEmbedConfig(): SpecoraEmbedConfig | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+  return window.__SPECORA_EMBED__;
+}
+
+/** True when opened via backend SDK or embed/docs surface. */
+export function isSdkEmbeddedContext(): boolean {
+  if (isEmbedSurface()) {
+    return true;
+  }
+  return Boolean(getSpecoraEmbedConfig());
+}
+
+/** Show workspace dropdown / create / rename / delete. */
+export function showWorkspaceManagement(): boolean {
+  return isFullAppSurface() && !isSdkEmbeddedContext();
+}
+
+/** Import or replace OpenAPI spec from the UI (hosted app only). */
+export function showImportSpec(): boolean {
+  return isFullAppSurface() && !isSdkEmbeddedContext();
+}

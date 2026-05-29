@@ -19,13 +19,18 @@ export function buildBootstrapHtml(
   indexHtml: string,
   options: EmbedCoreOptions & { specUrl: string; mountPath: string }
 ): string {
-  const config = {
+  const config: Record<string, unknown> = {
     surface: "embed",
     specUrl: options.specUrl,
     mountPath: options.mountPath,
     publicFilter: options.publicFilter ?? "tag:public",
     includeAll: options.includeAll ?? false,
+    downloadJsonUrl: options.downloadJsonUrl ?? options.specUrl,
   };
+
+  if (options.downloadYamlUrl) {
+    config.downloadYamlUrl = options.downloadYamlUrl;
+  }
 
   const injection = `<script>window.__SPECORA_EMBED__=${JSON.stringify(config)};</script>`;
   const html = rewriteEmbedAssetURLs(indexHtml, options);

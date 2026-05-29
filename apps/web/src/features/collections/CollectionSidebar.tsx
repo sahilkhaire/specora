@@ -94,6 +94,7 @@ interface CollectionSidebarProps {
   onImportPostman: () => void;
   schemaPanelOpen?: boolean;
   onToggleSchemaPanel?: () => void;
+  showCollectionActions?: boolean;
 }
 
 export function CollectionSidebar({
@@ -104,7 +105,8 @@ export function CollectionSidebar({
   onNewRequest,
   onImportPostman,
   schemaPanelOpen = false,
-  onToggleSchemaPanel
+  onToggleSchemaPanel,
+  showCollectionActions = true
 }: CollectionSidebarProps) {
   const [filter, setFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -179,13 +181,19 @@ export function CollectionSidebar({
       <div className="collection-sidebar">
         <EmptyState
           title="No requests yet"
-          description="Load an OpenAPI spec or import a Postman collection."
+          description={
+            showCollectionActions
+              ? "Load an OpenAPI spec or import a Postman collection."
+              : "No requests available for this API."
+          }
           action={
-            <div className="collection-sidebar-actions">
-              <Button variant="secondary" onClick={onImportPostman}>
-                Import Postman
-              </Button>
-            </div>
+            showCollectionActions ? (
+              <div className="collection-sidebar-actions">
+                <Button variant="secondary" onClick={onImportPostman}>
+                  Import Postman
+                </Button>
+              </div>
+            ) : undefined
           }
         />
       </div>
@@ -202,24 +210,28 @@ export function CollectionSidebar({
           aria-label="Search collection"
         />
         <div className="collection-sidebar-actions">
-          <button
-            type="button"
-            className="collection-sidebar-icon-btn"
-            onClick={onNewRequest}
-            title="New request"
-            aria-label="New request"
-          >
-            <IconPlus size={15} />
-          </button>
-          <button
-            type="button"
-            className="collection-sidebar-icon-btn"
-            onClick={onImportPostman}
-            title="Import Postman"
-            aria-label="Import Postman"
-          >
-            <IconUpload size={15} />
-          </button>
+          {showCollectionActions ? (
+            <>
+              <button
+                type="button"
+                className="collection-sidebar-icon-btn"
+                onClick={onNewRequest}
+                title="New request"
+                aria-label="New request"
+              >
+                <IconPlus size={15} />
+              </button>
+              <button
+                type="button"
+                className="collection-sidebar-icon-btn"
+                onClick={onImportPostman}
+                title="Import Postman"
+                aria-label="Import Postman"
+              >
+                <IconUpload size={15} />
+              </button>
+            </>
+          ) : null}
           {onToggleSchemaPanel ? (
             <button
               type="button"

@@ -393,6 +393,11 @@ button:disabled {
   min-width: 0;
 }
 
+.header-menu-item-link {
+  text-decoration: none;
+  color: inherit;
+}
+
 .header-menu-check {
   font-size: 0.75rem;
   color: var(--text-muted);
@@ -4435,6 +4440,27 @@ button.collection-tree-request:hover:not(:disabled) {
 
 .request-method-select:focus {
   outline: none;
+}
+
+.request-method-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 5.5rem;
+  flex-shrink: 0;
+  height: 2rem;
+  box-sizing: border-box;
+  border: none;
+  border-right: 1px solid var(--border);
+  font-family: "Geist", monospace;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0 0.5rem;
+  margin-right: 0.125rem;
+  border-radius: 6px 0 0 6px;
+  align-self: center;
 }
 
 .request-url-input {

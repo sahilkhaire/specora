@@ -1,4 +1,4 @@
-import { isFullAppSurface } from "@/config/deployment";
+import { isFullAppSurface, showWorkspaceManagement } from "@/config/deployment";
 import { HeaderSettingsMenu } from "@/app/HeaderSettingsMenu";
 import type { ThemeMode, WorkbenchHeaderConfig } from "@/app/header-types";
 import { WorkspaceSelector } from "@/features/workspaces/WorkspaceSelector";
@@ -24,7 +24,9 @@ interface AppHeaderProps {
   themeMode: ThemeMode;
   onThemeModeChange: (mode: ThemeMode) => void;
   showImportSpec: boolean;
+  sdkDownloadUrls?: { json?: string; yaml?: string };
   workbench?: WorkbenchHeaderConfig | null;
+  showExportPostman?: boolean;
 }
 
 export function AppHeader({
@@ -45,9 +47,12 @@ export function AppHeader({
   themeMode,
   onThemeModeChange,
   showImportSpec,
-  workbench
+  sdkDownloadUrls,
+  workbench,
+  showExportPostman = true
 }: AppHeaderProps) {
-  const showWorkspace = isFullAppSurface();
+  const showWorkspace = showWorkspaceManagement();
+  const showEnvironment = isFullAppSurface();
   const compact = Boolean(workbench);
 
   return (
@@ -84,17 +89,19 @@ export function AppHeader({
             </div>
 
             <span className="app-top-header-inline-separator" aria-hidden="true" />
-
-            {activeEnvName ? (
-              <button type="button" className="app-top-header-env-chip" onClick={onOpenEnvironment}>
-                <span className="app-top-header-env-name">{activeEnvName}</span>
-              </button>
-            ) : (
-              <Button variant="ghost" className="app-top-header-btn" onClick={onOpenEnvironment}>
-                Environment
-              </Button>
-            )}
           </>
+        ) : null}
+
+        {showEnvironment ? (
+          activeEnvName ? (
+            <button type="button" className="app-top-header-env-chip" onClick={onOpenEnvironment}>
+              <span className="app-top-header-env-name">{activeEnvName}</span>
+            </button>
+          ) : (
+            <Button variant="ghost" className="app-top-header-btn" onClick={onOpenEnvironment}>
+              Environment
+            </Button>
+          )
         ) : null}
       </div>
 
@@ -122,7 +129,9 @@ export function AppHeader({
           onThemeModeChange={onThemeModeChange}
           onOpenSettings={onOpenSettings}
           onImportSpec={showImportSpec && onImportSpec ? onImportSpec : undefined}
+          sdkDownloadUrls={sdkDownloadUrls}
           workbench={workbench}
+          showExportPostman={showExportPostman}
         />
       </nav>
     </header>

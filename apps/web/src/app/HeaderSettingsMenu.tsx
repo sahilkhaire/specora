@@ -15,7 +15,9 @@ interface HeaderSettingsMenuProps {
   onThemeModeChange: (mode: ThemeMode) => void;
   onOpenSettings: () => void;
   onImportSpec?: () => void;
+  sdkDownloadUrls?: { json?: string; yaml?: string };
   workbench?: WorkbenchHeaderConfig | null;
+  showExportPostman?: boolean;
 }
 
 const themeOptions: Array<{ mode: ThemeMode; label: string; icon: typeof IconSun }> = [
@@ -29,8 +31,12 @@ export function HeaderSettingsMenu({
   onThemeModeChange,
   onOpenSettings,
   onImportSpec,
-  workbench
+  sdkDownloadUrls,
+  workbench,
+  showExportPostman = true
 }: HeaderSettingsMenuProps) {
+  const hasSdkDownloads = Boolean(sdkDownloadUrls?.json || sdkDownloadUrls?.yaml);
+
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
@@ -58,6 +64,32 @@ export function HeaderSettingsMenu({
             </>
           ) : null}
 
+          {hasSdkDownloads ? (
+            <>
+              {sdkDownloadUrls?.json ? (
+                <DropdownMenu.Item className="header-menu-item" asChild>
+                  <a href={sdkDownloadUrls.json} className="header-menu-item-link">
+                    <span className="header-menu-item-icon">
+                      <IconDownload size={15} />
+                    </span>
+                    <span className="header-menu-item-text">Download JSON</span>
+                  </a>
+                </DropdownMenu.Item>
+              ) : null}
+              {sdkDownloadUrls?.yaml ? (
+                <DropdownMenu.Item className="header-menu-item" asChild>
+                  <a href={sdkDownloadUrls.yaml} className="header-menu-item-link">
+                    <span className="header-menu-item-icon">
+                      <IconDownload size={15} />
+                    </span>
+                    <span className="header-menu-item-text">Download YAML</span>
+                  </a>
+                </DropdownMenu.Item>
+              ) : null}
+              <DropdownMenu.Separator className="header-menu-separator" />
+            </>
+          ) : null}
+
           {workbench ? (
             <>
               <DropdownMenu.Item className="header-menu-item" onSelect={workbench.onToggleHistory}>
@@ -71,12 +103,14 @@ export function HeaderSettingsMenu({
                   </span>
                 ) : null}
               </DropdownMenu.Item>
-              <DropdownMenu.Item className="header-menu-item" onSelect={workbench.onExportPostman}>
-                <span className="header-menu-item-icon">
-                  <IconDownload size={15} />
-                </span>
-                <span className="header-menu-item-text">Export Postman collection</span>
-              </DropdownMenu.Item>
+              {showExportPostman ? (
+                <DropdownMenu.Item className="header-menu-item" onSelect={workbench.onExportPostman}>
+                  <span className="header-menu-item-icon">
+                    <IconDownload size={15} />
+                  </span>
+                  <span className="header-menu-item-text">Export Postman collection</span>
+                </DropdownMenu.Item>
+              ) : null}
               <DropdownMenu.Separator className="header-menu-separator" />
             </>
           ) : null}

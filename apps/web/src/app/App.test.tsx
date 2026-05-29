@@ -41,6 +41,7 @@ describe("App", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
+    delete window.__SPECORA_EMBED__;
   });
 
   it("loads pasted spec and renders summary + operations", async () => {
@@ -126,6 +127,24 @@ describe("App", () => {
     fireEvent.click(deleteButton as HTMLButtonElement);
 
     expect(screen.queryByText("Billing Workspace", { selector: ".workspace-item-name" })).not.toBeInTheDocument();
+  });
+
+  it("hides workspace and import actions in SDK embed context", async () => {
+    window.__SPECORA_EMBED__ = {
+      specUrl: "/api-docs/openapi.json",
+      downloadJsonUrl: "/api-docs/openapi.json",
+      downloadYamlUrl: "/api-docs/openapi.yaml",
+    };
+
+    renderApp();
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /Default Workspace/i })).not.toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole("heading", { name: /Add your API specification/i })
+    ).not.toBeInTheDocument();
   });
 
   it("shows actionable try-out message for direct network failures", async () => {

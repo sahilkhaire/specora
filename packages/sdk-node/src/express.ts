@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import {
   buildBootstrapHtml,
@@ -11,10 +12,19 @@ export interface SpecoraDocsOptions extends EmbedCoreOptions {
   mountPath?: string;
 }
 
+function isYamlSpecPath(specPath: string): boolean {
+  return /\.ya?ml$/i.test(specPath);
+}
+
 export function specoraDocs(options: SpecoraDocsOptions): RequestHandler {
   const mountPath = (options.mountPath ?? "/api-docs").replace(/\/$/, "");
   let cachedHtml: string | null = null;
   let specCache: Record<string, unknown> | null = null;
+
+  const downloadJsonUrl = options.downloadJsonUrl ?? `${mountPath}/openapi.json`;
+  const downloadYamlUrl =
+    options.downloadYamlUrl ??
+    (isYamlSpecPath(options.specPath) ? `${mountPath}/openapi.yaml` : undefined);
 
   async function loadAssets(): Promise<void> {
     const assets = await resolveEmbedAssets(options);
@@ -23,6 +33,8 @@ export function specoraDocs(options: SpecoraDocsOptions): RequestHandler {
       ...options,
       specUrl,
       mountPath,
+      downloadJsonUrl,
+      downloadYamlUrl,
     });
   }
 
@@ -47,6 +59,23 @@ export function specoraDocs(options: SpecoraDocsOptions): RequestHandler {
         }
         res.setHeader("content-type", "application/json");
         res.send(specCache);
+        return;
+      } catch (error) {
+        res.status(500).json({
+          error: error instanceof Error ? error.message : "Failed to read spec",
+        });
+        return;
+      }
+    }
+
+    if (
+      downloadYamlUrl &&
+      (url === `${mountPath}/openapi.yaml` || url === "/openapi.yaml")
+    ) {
+      try {
+        const raw = await readFile(options.specPath, "utf8");
+        res.setHeader("content-type", "application/yaml; charset=utf-8");
+        res.send(raw);
         return;
       } catch (error) {
         res.status(500).json({

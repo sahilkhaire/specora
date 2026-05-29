@@ -16,6 +16,10 @@ export interface EmbedCoreOptions {
   publicFilter?: "tag:public" | "extension" | "no-security" | "all";
   includeAll?: boolean;
   watch?: boolean;
+  /** Override canonical JSON download URL injected into embed config. */
+  downloadJsonUrl?: string;
+  /** Override canonical YAML download URL injected into embed config. */
+  downloadYamlUrl?: string;
 }
 
 export interface ResolvedEmbedAssets {

@@ -49,6 +49,27 @@ http.Handle("/api-docs/", specora.Handler(specora.Config{
 
 See [packages/sdk-go/README.md](../packages/sdk-go/README.md) for framework examples and options.
 
+## Embed UX (read-only)
+
+When Specora is mounted via an SDK, the UI is **read-only** for workspace and collection management:
+
+- No workspace switcher or create-workspace controls
+- No Import OpenAPI spec, New request, or Import Postman actions
+- HTTP method is fixed per OpenAPI operation (not editable)
+
+Try-out (params, headers, body, send) and environment variables still work for testing against your API.
+
+## Download canonical spec files
+
+The SDK injects `downloadJsonUrl` and (when applicable) `downloadYamlUrl` into `window.__SPECORA_EMBED__`. The settings menu shows **Download JSON** / **Download YAML** links that navigate to your backend routes — always the authoritative source files on disk, not in-browser state from try-out sessions.
+
+Defaults for `@specora/sdk-node`:
+
+- JSON: `{mountPath}/openapi.json`
+- YAML: `{mountPath}/openapi.yaml` when `specPath` ends with `.yaml` or `.yml`
+
+Override with `downloadJsonUrl` / `downloadYamlUrl` in `specoraDocs({ ... })` if canonical files are hosted elsewhere.
+
 ## CLI preview
 
 ```bash
