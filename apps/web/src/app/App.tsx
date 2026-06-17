@@ -22,6 +22,8 @@ import {
   showImportSpec as canImportSpec,
   showTryOutPanel,
 } from "@/config/deployment";
+import { readScopedItem, writeScopedItem } from "@/data/scoped-storage";
+import { getEmbedWorkspaceId } from "@/data/storage-scope";
 import {
   applyVariables,
   resolveRequestUrl,
@@ -47,14 +49,15 @@ import { fetchViaTryoutProxy } from "@/features/http/proxy-client";
 type LoadMode = "url" | "upload" | "paste";
 type ThemeMode = "light" | "dark" | "system";
 
-const THEME_STORAGE_KEY = "specora-theme-mode";
+const THEME_STORAGE_KEY = "theme-mode";
+const THEME_LEGACY_KEY = "specora-theme-mode";
 
 function getStoredThemeMode(): ThemeMode {
   if (typeof window === "undefined") {
     return "system";
   }
 
-  const value = window.localStorage.getItem(THEME_STORAGE_KEY);
+  const value = readScopedItem(THEME_STORAGE_KEY, THEME_LEGACY_KEY);
   if (value === "light" || value === "dark" || value === "system") {
     return value;
   }
@@ -188,14 +191,14 @@ export function App() {
         setError(loadError instanceof Error ? loadError.message : "Failed to load embedded spec");
       }
     })();
-  }, []);
+  }, [embedConfig?.specUrl]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
 
-    window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+    writeScopedItem(THEME_STORAGE_KEY, themeMode);
   }, [themeMode]);
 
   useEffect(() => {
@@ -297,6 +300,10 @@ export function App() {
 
   useEffect(() => {
     if (!workspacesHydrated) {
+      return;
+    }
+
+    if (isSdkEmbeddedContext()) {
       return;
     }
 
@@ -675,6 +682,9 @@ export function App() {
 
   const useApiClient = Boolean(spec && showTryOut);
   const embedSpecLoading = Boolean(embedConfig?.specUrl && !spec && !error);
+  const workbenchWorkspaceId = isSdkEmbeddedContext()
+    ? getEmbedWorkspaceId()
+    : activeWorkspaceId;
 
   const openSpecLoader = useCallback(() => {
     setShowSpecLoader(true);
@@ -709,9 +719,9 @@ export function App() {
 
       <div className="app-body">
         <main className={`main-panel ${useApiClient ? "main-panel-client" : ""}`}>
-          {useApiClient && activeWorkspaceId ? (
+          {useApiClient && workbenchWorkspaceId ? (
             <ApiClientWorkbench
-              workspaceId={activeWorkspaceId}
+              workspaceId={workbenchWorkspaceId}
               spec={spec!}
               operations={operations}
               onWorkbenchHeaderChange={setWorkbenchHeader}

@@ -9,6 +9,7 @@ import type {
   WorkflowStore,
   WorkspaceStore
 } from "./types";
+import { readScopedJson, readScopedItem, writeScopedItem, writeScopedJson } from "./scoped-storage";
 import {
   getPersistedActiveWorkspaceId,
   loadPersistedWorkspaces,
@@ -16,28 +17,18 @@ import {
   setPersistedActiveWorkspaceId,
 } from "./workspace-persistence";
 
-const ENVS_KEY = "specora:environments";
-const ACTIVE_ENV_KEY = "specora:activeEnvId";
-const WORKFLOWS_PREFIX = "specora:workflows:";
-const COLLECTIONS_PREFIX = "specora:collections:";
-const HISTORY_PREFIX = "specora:history:";
+const ENVS_KEY = "environments";
+const ACTIVE_ENV_KEY = "activeEnvId";
+const WORKFLOWS_PREFIX = "workflows:";
+const COLLECTIONS_PREFIX = "collections:";
+const HISTORY_PREFIX = "history:";
 
 function readJson<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
+  return readScopedJson(key, fallback);
 }
 
 function writeJson(key: string, value: unknown): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Keep UI usable when storage is full or blocked.
-  }
+  writeScopedJson(key, value);
 }
 
 const workspaceStore: WorkspaceStore = {
@@ -63,18 +54,10 @@ const environmentStore: EnvironmentStore = {
     writeJson(ENVS_KEY, environments);
   },
   async getActiveId() {
-    try {
-      return localStorage.getItem(ACTIVE_ENV_KEY) ?? "";
-    } catch {
-      return "";
-    }
+    return readScopedItem(ACTIVE_ENV_KEY) ?? "";
   },
   async setActiveId(id) {
-    try {
-      localStorage.setItem(ACTIVE_ENV_KEY, id);
-    } catch {
-      /* noop */
-    }
+    writeScopedItem(ACTIVE_ENV_KEY, id);
   },
 };
 
@@ -120,4 +103,3 @@ export function createLocalStorageStores(): AppDataStores {
     history: historyStore
   };
 }
-

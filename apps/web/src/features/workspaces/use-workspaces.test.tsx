@@ -2,6 +2,7 @@ import React from "react";
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { DataProvider } from "@/data/DataProvider";
+import { scopedKey } from "@/data/storage-scope";
 import { useWorkspaces } from "./use-workspaces";
 
 function wrapper({ children }: { children: React.ReactNode }) {
@@ -14,6 +15,12 @@ const ACTIVE_WORKSPACE_KEY = "specora:activeWorkspaceId";
 describe("useWorkspaces", () => {
   beforeEach(() => {
     localStorage.clear();
+    delete window.__SPECORA_EMBED__;
+    Object.defineProperty(window, "location", {
+      value: { origin: "https://app.example.com", pathname: "/" },
+      writable: true,
+      configurable: true,
+    });
   });
 
   it("filters invalid records and sanitizes malformed workspace fields", async () => {
@@ -79,6 +86,6 @@ describe("useWorkspaces", () => {
       expect(result.current.activeWorkspaceId).toBe("ws-1");
     });
 
-    expect(localStorage.getItem(ACTIVE_WORKSPACE_KEY)).toBe("ws-1");
+    expect(localStorage.getItem(scopedKey("activeWorkspaceId"))).toBe("ws-1");
   });
 });

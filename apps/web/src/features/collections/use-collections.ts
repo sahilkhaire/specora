@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDataContext } from "@/data/DataProvider";
+import { isSdkEmbeddedContext } from "@/config/deployment";
 import { bootstrapCollectionFromSpec, computeSpecFingerprint, emptyState } from "./collection-bootstrap";
 import { capExchangesForRequest, migrateCollectionState } from "./collection-migrate";
 import type { CollectionNode, SavedExchange, SavedRequest, WorkspaceCollectionState } from "./collection-types";
@@ -41,10 +42,13 @@ export function useCollections(workspaceId: string, spec: Record<string, unknown
       if (prev.specFingerprint === fingerprint && prev.nodes.length > 0) {
         return prev;
       }
-      const next = bootstrapCollectionFromSpec(
-        spec,
-        prev.nodes.length > 0 || prev.requests.length > 0 ? prev : null
-      );
+
+      const embedded = isSdkEmbeddedContext();
+      const fingerprintChanged = prev.specFingerprint !== "" && prev.specFingerprint !== fingerprint;
+      const hasExisting = prev.nodes.length > 0 || prev.requests.length > 0;
+      const existing = hasExisting && (!embedded || !fingerprintChanged) ? prev : null;
+
+      const next = bootstrapCollectionFromSpec(spec, existing);
       void stores.collections.save(workspaceId, next);
       return next;
     });

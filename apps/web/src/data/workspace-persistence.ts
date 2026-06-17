@@ -1,8 +1,10 @@
 import type { Workspace } from "@/features/workspaces/workspace-types";
+import { readScopedJson, readScopedItem, writeScopedItem, writeScopedJson } from "./scoped-storage";
+import { getScopedIndexedDbName } from "./storage-scope";
 
-const WORKSPACES_KEY = "specora:workspaces";
-const ACTIVE_WORKSPACE_KEY = "specora:activeWorkspaceId";
-const DB_NAME = "specora";
+const WORKSPACES_KEY = "workspaces";
+const ACTIVE_WORKSPACE_KEY = "activeWorkspaceId";
+const LEGACY_DB_NAME = "specora";
 const DB_VERSION = 1;
 const SPEC_STORE = "workspace-specs";
 
@@ -15,33 +17,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function readJson<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
 function writeJson(key: string, value: unknown): boolean {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch {
-    return false;
-  }
+  return writeScopedJson(key, value);
 }
 
-function openSpecDb(): Promise<IDBDatabase> {
+function openSpecDb(dbName: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === "undefined") {
       reject(new Error("IndexedDB unavailable"));
       return;
     }
 
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    const request = indexedDB.open(dbName, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(SPEC_STORE)) {
@@ -54,7 +41,7 @@ function openSpecDb(): Promise<IDBDatabase> {
 }
 
 async function idbPutSpec(workspaceId: string, spec: Record<string, unknown>): Promise<void> {
-  const db = await openSpecDb();
+  const db = await openSpecDb(getScopedIndexedDbName());
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(SPEC_STORE, "readwrite");
     tx.objectStore(SPEC_STORE).put(spec, workspaceId);
@@ -69,8 +56,11 @@ async function idbPutSpec(workspaceId: string, spec: Record<string, unknown>): P
   });
 }
 
-async function idbGetSpec(workspaceId: string): Promise<Record<string, unknown> | null> {
-  const db = await openSpecDb();
+async function idbGetSpecFromDb(
+  dbName: string,
+  workspaceId: string
+): Promise<Record<string, unknown> | null> {
+  const db = await openSpecDb(dbName);
   return new Promise((resolve, reject) => {
     const tx = db.transaction(SPEC_STORE, "readonly");
     const request = tx.objectStore(SPEC_STORE).get(workspaceId);
@@ -86,8 +76,25 @@ async function idbGetSpec(workspaceId: string): Promise<Record<string, unknown> 
   });
 }
 
+async function idbGetSpec(workspaceId: string): Promise<Record<string, unknown> | null> {
+  try {
+    const scoped = await idbGetSpecFromDb(getScopedIndexedDbName(), workspaceId);
+    if (scoped) {
+      return scoped;
+    }
+
+    const legacy = await idbGetSpecFromDb(LEGACY_DB_NAME, workspaceId);
+    if (legacy) {
+      await idbPutSpec(workspaceId, legacy);
+    }
+    return legacy;
+  } catch {
+    return null;
+  }
+}
+
 async function idbDeleteSpec(workspaceId: string): Promise<void> {
-  const db = await openSpecDb();
+  const db = await openSpecDb(getScopedIndexedDbName());
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(SPEC_STORE, "readwrite");
     tx.objectStore(SPEC_STORE).delete(workspaceId);
@@ -103,7 +110,7 @@ async function idbDeleteSpec(workspaceId: string): Promise<void> {
 }
 
 export async function loadPersistedWorkspaces(): Promise<Workspace[]> {
-  const stored = readJson<StoredWorkspaceRow[]>(WORKSPACES_KEY, []);
+  const stored = readScopedJson<StoredWorkspaceRow[]>(WORKSPACES_KEY, []);
   const workspaces: Workspace[] = [];
 
   for (const entry of stored) {
@@ -162,17 +169,9 @@ export async function savePersistedWorkspaces(workspaces: Workspace[]): Promise<
 }
 
 export async function getPersistedActiveWorkspaceId(): Promise<string> {
-  try {
-    return localStorage.getItem(ACTIVE_WORKSPACE_KEY) ?? "";
-  } catch {
-    return "";
-  }
+  return readScopedItem(ACTIVE_WORKSPACE_KEY) ?? "";
 }
 
 export async function setPersistedActiveWorkspaceId(id: string): Promise<void> {
-  try {
-    localStorage.setItem(ACTIVE_WORKSPACE_KEY, id);
-  } catch {
-    /* noop */
-  }
+  writeScopedItem(ACTIVE_WORKSPACE_KEY, id);
 }

@@ -5,10 +5,17 @@ import {
   importGuestData,
   isGuestExportPayload,
 } from "./guest-export";
+import { scopedKey } from "./storage-scope";
 
 describe("guest-export", () => {
   beforeEach(() => {
     localStorage.clear();
+    delete window.__SPECORA_EMBED__;
+    Object.defineProperty(window, "location", {
+      value: { origin: "https://app.example.com", pathname: "/" },
+      writable: true,
+      configurable: true,
+    });
   });
 
   it("exports and validates guest payload shape", async () => {
@@ -38,7 +45,7 @@ describe("guest-export", () => {
     localStorage.clear();
     await importGuestData(exported);
 
-    const raw = localStorage.getItem("specora:workspaces");
+    const raw = localStorage.getItem(scopedKey("workspaces"));
     expect(raw).toContain("ws-1");
   });
 });

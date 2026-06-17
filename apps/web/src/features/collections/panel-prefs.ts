@@ -1,9 +1,11 @@
-const SCHEMA_PANEL_KEY = "specora:panel:schema";
-const HISTORY_PANEL_KEY = "specora:panel:history";
+import { readScopedItem, writeScopedItem } from "@/data/scoped-storage";
+
+const SCHEMA_PANEL_KEY = "panel:schema";
+const HISTORY_PANEL_KEY = "panel:history";
 
 function readBool(key: string, fallback: boolean): boolean {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = readScopedItem(key);
     if (raw === null) return fallback;
     return raw === "true";
   } catch {
@@ -12,11 +14,7 @@ function readBool(key: string, fallback: boolean): boolean {
 }
 
 function writeBool(key: string, value: boolean): void {
-  try {
-    localStorage.setItem(key, String(value));
-  } catch {
-    /* storage unavailable */
-  }
+  writeScopedItem(key, String(value));
 }
 
 export function readSchemaPanelOpen(): boolean {
