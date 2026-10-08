@@ -77,7 +77,7 @@ export function AppShell({ sidebar, main, docs: docsContent, docsOpen = true, hi
               {sidebar}
             </Panel>
             <PanelResizeHandle className="app-panel-resize" />
-            <Panel defaultSize={docs ? 48 : 58} minSize={30} className="app-panel app-panel-main">
+            <Panel defaultSize={docs ? 44 : 78} minSize={30} className="app-panel app-panel-main">
               {main}
             </Panel>
             {docs ? (

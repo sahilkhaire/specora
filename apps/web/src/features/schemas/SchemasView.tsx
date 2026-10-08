@@ -73,7 +73,7 @@ export function SchemasView({ spec }: SchemasViewProps) {
 
               <details className="schema-raw">
                 <summary>View JSON</summary>
-                <pre>{JSON.stringify(schema, null, 2)}</pre>
+                <pre tabIndex={0}>{JSON.stringify(schema, null, 2)}</pre>
               </details>
             </div>
           );

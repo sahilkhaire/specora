@@ -31,6 +31,7 @@ import type { WorkbenchHeaderConfig } from "@/app/header-types";
 import { useThemeMode } from "@/app/use-theme-mode";
 import { Button } from "@/shared/ui/Button";
 import { EmptyState } from "@/shared/ui/EmptyState";
+import { ErrorBoundary } from "@/shared/ui/ErrorBoundary";
 
 export function App() {
   const { themeMode, setThemeMode, resolvedTheme } = useThemeMode();
@@ -178,6 +179,11 @@ export function App() {
   }, [handleSpecLoaded]);
 
   const info = (spec?.info as Record<string, unknown> | undefined) ?? {};
+  const pageTitle = spec ? `${String(info.title ?? "API")} · Specora` : "Specora";
+
+  useEffect(() => {
+    document.title = pageTitle;
+  }, [pageTitle]);
   const hostedApp = !isSdkEmbeddedContext() && Boolean(deploymentConfig.apiBaseUrl);
   // Publishing needs the workspace to exist server-side, i.e. a signed-in (synced) account.
   const canPublish = hostedApp && backend === "remote" && Boolean(activeWorkspace);
@@ -269,7 +275,22 @@ export function App() {
       />
 
       <div className="app-body">
-        <main className={`main-panel ${spec ? "main-panel-client" : ""}`}>{renderMain()}</main>
+        <main className={`main-panel ${spec ? "main-panel-client" : ""}`}>
+          <h1 className="visually-hidden">{pageTitle}</h1>
+          <ErrorBoundary
+            key={`${workbenchWorkspaceId}:${activeWorkspace?.updatedAt ?? ""}`}
+            scope="this API"
+            actions={
+              allowImportSpec ? (
+                <Button variant="secondary" onClick={openSpecLoader}>
+                  Import a different spec
+                </Button>
+              ) : undefined
+            }
+          >
+            {renderMain()}
+          </ErrorBoundary>
+        </main>
       </div>
 
       <SettingsView

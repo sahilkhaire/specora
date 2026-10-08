@@ -208,7 +208,7 @@ export function JsonResponseViewer({ body, placeholder, placeholderText }: JsonR
 
   if (placeholder) {
     return (
-      <pre className="tryout-response-body tryout-response-body--placeholder">
+      <pre tabIndex={0} className="tryout-response-body tryout-response-body--placeholder">
         {placeholderText ?? body}
       </pre>
     );
@@ -227,7 +227,7 @@ export function JsonResponseViewer({ body, placeholder, placeholderText }: JsonR
             aria-label="Search response"
           />
         </div>
-        <pre className="tryout-response-body json-viewer-raw">
+        <pre tabIndex={0} className="tryout-response-body json-viewer-raw">
           {query
             ? parsed.text
                 .split("\n")

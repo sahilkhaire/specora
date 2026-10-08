@@ -5,6 +5,7 @@ import {
   parseParamRowsToRecord,
   paramRowsToRecord,
   recordToParamRows,
+  requiredQueryKeys,
   serializeParamRecord,
   serializeParamRows
 } from "./param-rows";
@@ -52,5 +53,25 @@ describe("param-rows", () => {
     );
     expect(paramRowsToRecord(rows, { respectEnabled: false })).toEqual({ userId: "42" });
     expect(paramRowsToRecord(rows)).toEqual({});
+  });
+});
+
+describe("required query params", () => {
+  it("start enabled while optional ones stay off", () => {
+    const rows = mergeParamRowsInput("{}", { status: "", limit: "" }, { defaultEnabled: false, requiredKeys: ["status"] });
+    expect(rows.find((row) => row.key === "status")?.enabled).toBe(true);
+    expect(rows.find((row) => row.key === "limit")?.enabled).toBe(false);
+  });
+
+  it("lists only required query parameters", () => {
+    expect(
+      requiredQueryKeys({
+        parameters: [
+          { name: "status", in: "query", required: true },
+          { name: "id", in: "path", required: true },
+          { name: "limit", in: "query" }
+        ]
+      })
+    ).toEqual(["status"]);
   });
 });

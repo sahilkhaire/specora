@@ -91,10 +91,14 @@ export function ParamKeyValueTable({
         <table>
           <thead>
             <tr>
-              {enableToggle ? <th className="param-kv-col-enable" aria-label="Enabled" /> : null}
+              {enableToggle ? <th className="param-kv-col-enable">
+                  <span className="visually-hidden">Enabled</span>
+                </th> : null}
               <th>Key</th>
               <th>Value</th>
-              <th className="param-kv-col-actions" aria-label="Actions" />
+              <th className="param-kv-col-actions">
+                <span className="visually-hidden">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>

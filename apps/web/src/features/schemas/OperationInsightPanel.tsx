@@ -210,7 +210,7 @@ export function OperationInsightPanel({
                       ) : null}
                     </div>
                   </div>
-                  <pre className="insight-json-preview">{requestSample || "{}"}</pre>
+                  <pre tabIndex={0} className="insight-json-preview">{requestSample || "{}"}</pre>
                 </div>
               </div>
             </>
@@ -247,7 +247,7 @@ export function OperationInsightPanel({
                 </div>
                 <div className="insight-schema-sample">
                   <h4>Sample response</h4>
-                  <pre className="insight-json-preview">{responseSample || "{}"}</pre>
+                  <pre tabIndex={0} className="insight-json-preview">{responseSample || "{}"}</pre>
                 </div>
               </div>
             </>

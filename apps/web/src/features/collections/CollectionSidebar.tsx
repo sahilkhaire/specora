@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { CollectionNode, SavedRequest } from "./collection-types";
 import { Input } from "@/shared/ui/Input";
@@ -130,6 +130,64 @@ export function CollectionSidebar({
     enabled: useVirtual
   });
 
+  // Roving tabindex (WAI-ARIA tree): the tree is one Tab stop; arrow keys move between rows.
+  const [activeIndex, setActiveIndex] = useState(0);
+  const selectedIndex = rows.findIndex((row) => row.requestId && row.requestId === selectedRequestId);
+  useEffect(() => {
+    if (selectedIndex >= 0) setActiveIndex(selectedIndex);
+  }, [selectedIndex]);
+  const focusIndex = Math.min(activeIndex, Math.max(rows.length - 1, 0));
+
+  function moveFocus(index: number) {
+    const next = Math.max(0, Math.min(rows.length - 1, index));
+    setActiveIndex(next);
+    if (useVirtual) virtualizer.scrollToIndex(next, { align: "auto" });
+    requestAnimationFrame(() => {
+      parentRef.current?.querySelector<HTMLElement>(`[data-row-index="${next}"]`)?.focus();
+    });
+  }
+
+  function onTreeKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const row = rows[focusIndex];
+    if (!row) return;
+    const handled = (() => {
+      switch (event.key) {
+        case "ArrowDown":
+          moveFocus(focusIndex + 1);
+          return true;
+        case "ArrowUp":
+          moveFocus(focusIndex - 1);
+          return true;
+        case "Home":
+          moveFocus(0);
+          return true;
+        case "End":
+          moveFocus(rows.length - 1);
+          return true;
+        case "ArrowRight":
+          if (row.kind === "folder" && !expanded.has(row.id)) toggleFolder(row.id);
+          else moveFocus(focusIndex + 1);
+          return true;
+        case "ArrowLeft":
+          if (row.kind === "folder" && expanded.has(row.id)) {
+            toggleFolder(row.id);
+          } else {
+            // Jump to the parent folder: the nearest earlier row one level up.
+            for (let i = focusIndex - 1; i >= 0; i--) {
+              if (rows[i]!.depth < row.depth) {
+                moveFocus(i);
+                break;
+              }
+            }
+          }
+          return true;
+        default:
+          return false;
+      }
+    })();
+    if (handled) event.preventDefault();
+  }
+
   const toggleFolder = (id: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -139,8 +197,9 @@ export function CollectionSidebar({
     });
   };
 
-  function renderRow(row: FlatTreeRow, style: CSSProperties) {
+  function renderRow(row: FlatTreeRow, index: number, style: CSSProperties) {
     const isSelected = row.requestId === selectedRequestId;
+    const tabIndex = index === focusIndex ? 0 : -1;
     return (
       <div
         key={row.id}
@@ -148,20 +207,28 @@ export function CollectionSidebar({
         style={style}
         role="treeitem"
         aria-selected={isSelected}
+        aria-level={row.depth + 1}
+        aria-expanded={row.kind === "folder" ? expanded.has(row.id) : undefined}
       >
         {row.kind === "folder" ? (
           <button
             type="button"
             className="collection-tree-folder"
+            tabIndex={tabIndex}
+            data-row-index={index}
+            onFocus={() => setActiveIndex(index)}
             onClick={() => toggleFolder(row.id)}
           >
-            <span className="collection-tree-chevron">{expanded.has(row.id) ? "▾" : "▸"}</span>
+            <span className="collection-tree-chevron" aria-hidden="true">{expanded.has(row.id) ? "▾" : "▸"}</span>
             {row.name}
           </button>
         ) : (
           <button
             type="button"
             className="collection-tree-request"
+            tabIndex={tabIndex}
+            data-row-index={index}
+            onFocus={() => setActiveIndex(index)}
             onClick={() => {
               if (!row.requestId) return;
               onSelectRequest(row.requestId);
@@ -235,12 +302,18 @@ export function CollectionSidebar({
           ) : null}
         </div>
       </div>
-      <div ref={parentRef} className="collection-sidebar-list" role="tree">
+      <div
+        ref={parentRef}
+        className="collection-sidebar-list"
+        role="tree"
+        aria-label="Requests"
+        onKeyDown={onTreeKeyDown}
+      >
         {useVirtual ? (
           <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
             {virtualizer.getVirtualItems().map((virtualRow) => {
               const row = rows[virtualRow.index]!;
-              return renderRow(row, {
+              return renderRow(row, virtualRow.index, {
                 position: "absolute",
                 top: 0,
                 left: 0,
@@ -252,8 +325,8 @@ export function CollectionSidebar({
             })}
           </div>
         ) : (
-          rows.map((row) =>
-            renderRow(row, { paddingLeft: `${8 + row.depth * 14}px` })
+          rows.map((row, index) =>
+            renderRow(row, index, { paddingLeft: `${8 + row.depth * 14}px` })
           )
         )}
       </div>

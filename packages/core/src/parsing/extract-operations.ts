@@ -78,12 +78,19 @@ export function operationKey(operation: Pick<OperationItem, "method" | "path" | 
 }
 
 export function detectDefaultServerUrl(spec: Record<string, unknown>): string {
-  const servers = spec.servers;
-  if (Array.isArray(servers) && servers.length > 0) {
-    const first = servers[0] as { url?: unknown };
-    if (typeof first.url === "string") {
-      return first.url;
-    }
+  const servers = Array.isArray(spec.servers) ? spec.servers : [];
+  const first = servers.find(
+    (server): server is { url: string; variables?: unknown } =>
+      Boolean(server) && typeof server === "object" && typeof (server as { url?: unknown }).url === "string"
+  );
+  if (first) {
+    // Fill `{name}` server variables with their declared defaults.
+    const variables =
+      first.variables && typeof first.variables === "object" ? (first.variables as Record<string, unknown>) : {};
+    return first.url.replace(/\{([^}]+)\}/g, (match, name: string) => {
+      const definition = variables[name] as { default?: unknown } | null | undefined;
+      return definition && definition.default !== undefined ? String(definition.default) : match;
+    });
   }
 
   if (typeof spec.host === "string") {

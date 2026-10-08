@@ -199,13 +199,11 @@ paths:
     fireEvent.click(screen.getByRole("button", { name: /List pets/i }));
     fireEvent.click(screen.getAllByRole("button", { name: "Send" })[0]!);
 
-    await waitFor(() => {
-      expect(
-        screen.getByText(
-          "Network request failed (often CORS or connectivity). Next step: check API reachability or enable local proxy mode (`npx specora proxy --port 8787`)."
-        )
-      ).toBeInTheDocument();
-    });
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "Network request failed (often CORS or connectivity). Next step: check API reachability or enable local proxy mode (npx specora proxy --port 8787)."
+    );
+    expect(alert.querySelector("code")).toHaveTextContent("npx specora proxy --port 8787");
   });
 
   it("shows the load error when an embedded spec cannot be fetched", async () => {
@@ -256,5 +254,20 @@ paths:
     expect(await screen.findByRole("dialog", { name: "API overview" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Servers" }));
     expect(screen.getByText("https://api.example.com")).toBeInTheDocument();
+  });
+
+  it("sends the request with Ctrl+Enter", async () => {
+    window.__SPECORA_EMBED__ = { specUrl: "/api-docs/openapi.json", includeAll: true };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(fixture, { status: 200 }));
+    renderApp();
+    await screen.findByRole("button", { name: /List pets/i });
+    fireEvent.click(screen.getByRole("button", { name: /List pets/i }));
+    fetchMock.mockResolvedValue(new Response("[]", { status: 200, headers: { "content-type": "application/json" } }));
+
+    fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("https://api.example.com/pets", expect.objectContaining({ method: "GET" }));
+    });
   });
 });

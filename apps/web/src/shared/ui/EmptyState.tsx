@@ -11,7 +11,7 @@ export function EmptyState({
 }) {
   return (
     <div className="ui-empty-state">
-      <h3>{title}</h3>
+      <h2>{title}</h2>
       {description ? <p>{description}</p> : null}
       {action}
     </div>

@@ -138,3 +138,13 @@ test("rejects YAML that is not an object", async () => {
   const result = await parseAndValidateSpec({ sourceType: "text", value: "just a string" });
   assert.equal(result.ok, false);
 });
+
+test("detectDefaultServerUrl skips malformed entries and fills variable defaults", async () => {
+  const { detectDefaultServerUrl } = await import("../src/index.js");
+  assert.equal(
+    detectDefaultServerUrl({ servers: [null, 5, { url: 7 }, { url: "https://{region}.api.example.com", variables: { region: { default: "eu" } } }] }),
+    "https://eu.api.example.com"
+  );
+  assert.equal(detectDefaultServerUrl({ swagger: "2.0", host: "api.example.com", basePath: "/v1" }), "https://api.example.com/v1");
+  assert.equal(detectDefaultServerUrl({}), "");
+});

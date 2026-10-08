@@ -10,6 +10,13 @@ export interface ParamRow {
 export interface ParamRowOptions {
   /** Default enabled state for new rows (query params: false). */
   defaultEnabled?: boolean;
+  /** Schema keys that start enabled regardless of `defaultEnabled` (required parameters). */
+  requiredKeys?: readonly string[];
+}
+
+/** Names of required query parameters, which should be sent unless the user unticks them. */
+export function requiredQueryKeys(operation: { parameters: ReadonlyArray<{ name: string; in: string; required?: boolean }> } | null | undefined): string[] {
+  return (operation?.parameters ?? []).filter((p) => p.in === "query" && p.required).map((p) => p.name);
 }
 
 export function newParamRow(
@@ -142,7 +149,9 @@ export function mergeParamRowsInput(
         id: rowIdForKey(key, currentRows, usedIds),
         key,
         value: merged[key] ?? "",
-        enabled: enabledByKey.has(key) ? enabledByKey.get(key)! : defaultEnabled
+        enabled: enabledByKey.has(key)
+          ? enabledByKey.get(key)!
+          : (options.requiredKeys?.includes(key) ?? false) || defaultEnabled
       }, options)
     ),
     ...extraKeys.map((key) =>
@@ -150,7 +159,9 @@ export function mergeParamRowsInput(
         id: rowIdForKey(key, currentRows, usedIds),
         key,
         value: merged[key] ?? "",
-        enabled: enabledByKey.has(key) ? enabledByKey.get(key)! : defaultEnabled
+        enabled: enabledByKey.has(key)
+          ? enabledByKey.get(key)!
+          : (options.requiredKeys?.includes(key) ?? false) || defaultEnabled
       }, options)
     )
   ];

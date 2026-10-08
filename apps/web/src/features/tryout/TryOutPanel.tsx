@@ -20,8 +20,9 @@ import {
   type AuthType,
 } from "./tryout-utils";
 import { ParamKeyValueTable } from "./ParamKeyValueTable";
+import { InlineCode } from "@/shared/ui/InlineCode";
 import { VariableHighlightText } from "./VariableHighlight";
-import { mergeParamRowsInput, paramRowsToRecord, parseParamRowsInput } from "./param-rows";
+import { mergeParamRowsInput, paramRowsToRecord, parseParamRowsInput, requiredQueryKeys } from "./param-rows";
 
 type TryoutTab = "params" | "headers" | "body" | "auth" | "curl" | "saved";
 
@@ -133,13 +134,17 @@ export function TryOutPanel({
   }, [selectedOperation]);
 
   const endpointPath = selectedOperation?.path ?? requestPath ?? "";
+  // Only show the path-params table when the path has placeholders or the user added rows.
+  const hasPathParams =
+    /\{[^}]+\}|:[A-Za-z_]/.test(endpointPath) ||
+    parseParamRowsInput(pathParamsInput).some((row) => row.key.trim());
 
   const rawPreviewUrl = useMemo(() => {
     if (!endpointPath.trim() || !serverUrl.trim()) return "";
 
     const queryParams = paramRowsToRecord(
       Object.keys(paramScaffold.queryParams).length > 0
-        ? mergeParamRowsInput(queryParamsInput, paramScaffold.queryParams)
+        ? mergeParamRowsInput(queryParamsInput, paramScaffold.queryParams, { requiredKeys: requiredQueryKeys(selectedOperation) })
         : parseParamRowsInput(queryParamsInput)
     );
 
@@ -171,7 +176,7 @@ export function TryOutPanel({
     const queryParams = applyVars(
       paramRowsToRecord(
         Object.keys(paramScaffold.queryParams).length > 0
-          ? mergeParamRowsInput(queryParamsInput, paramScaffold.queryParams)
+          ? mergeParamRowsInput(queryParamsInput, paramScaffold.queryParams, { requiredKeys: requiredQueryKeys(selectedOperation) })
           : parseParamRowsInput(queryParamsInput)
       )
     );
@@ -453,7 +458,7 @@ export function TryOutPanel({
                   {copied === "curl" ? "Copied" : "Copy"}
                 </button>
               </div>
-              <pre className="tryout-curl-pre">
+              <pre tabIndex={0} className="tryout-curl-pre">
                 {curlCommand || "Complete URL and headers to generate cURL."}
               </pre>
             </div>
@@ -461,14 +466,16 @@ export function TryOutPanel({
 
           {tab === "params" ? (
             <div className="tryout-params-stack">
-              <ParamKeyValueTable
-                label="Path params"
-                value={pathParamsInput}
-                onChange={onPathParamsChange}
-                schemaParams={paramScaffold.pathParams}
-                enableToggle={false}
-                variables={vars}
-              />
+              {hasPathParams ? (
+                <ParamKeyValueTable
+                  label="Path params"
+                  value={pathParamsInput}
+                  onChange={onPathParamsChange}
+                  schemaParams={paramScaffold.pathParams}
+                  enableToggle={false}
+                  variables={vars}
+                />
+              ) : null}
               <ParamKeyValueTable
                 label="Query params"
                 value={queryParamsInput}
@@ -592,7 +599,6 @@ export function TryOutPanel({
           ) : null}
           </div>
 
-          {requestError ? <p className="tryout-error" role="alert">{requestError}</p> : null}
         </Panel>
 
         <PanelResizeHandle className="tryout-split-resize" aria-label="Resize request and response panels" />
@@ -628,6 +634,12 @@ export function TryOutPanel({
             ) : null}
           </div>
         </div>
+
+        {requestError ? (
+          <p className="tryout-error tryout-error--response" role="alert">
+            <InlineCode text={requestError} />
+          </p>
+        ) : null}
 
         {Object.keys(requestHeaders).length > 0 ? (
           <details className="tryout-response-headers" open={showHeadersOpen}>

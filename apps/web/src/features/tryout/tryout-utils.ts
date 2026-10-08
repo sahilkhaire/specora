@@ -50,9 +50,10 @@ export function stripUrlQuery(path: string): string {
 }
 
 export function substitutePathParams(path: string, pathParams: Record<string, string>): string {
-  return path.replace(/\{([^}]+)\}/g, (_full, key: string) => {
+  return path.replace(/\{([^}]+)\}/g, (full, key: string) => {
     const replacement = pathParams[key];
-    return encodeURIComponent(replacement ?? `{${key}}`);
+    // Unfilled parameters stay as a readable "{key}" placeholder (sending is blocked until filled).
+    return replacement?.trim() ? encodeURIComponent(replacement) : full;
   });
 }
 

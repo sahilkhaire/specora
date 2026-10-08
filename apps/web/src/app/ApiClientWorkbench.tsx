@@ -21,6 +21,7 @@ import { missingPathParams, scaffoldFromOperation, parseRecordJson, methodBadgeC
 import {
   mergeParamRowsInput,
   parseParamRowsToRecord,
+  requiredQueryKeys,
   serializeParamRecord,
   serializeParamRows
 } from "@/features/tryout/param-rows";
@@ -217,7 +218,7 @@ export function ApiClientWorkbench({
           mergeParamRowsInput(
             serializeParamRecord(selectedRequest.queryParams, { defaultEnabled: true }),
             scaffold.queryParams,
-            { defaultEnabled: false }
+            { defaultEnabled: false, requiredKeys: requiredQueryKeys(linkedOperation) }
           )
         )
       );
@@ -364,9 +365,9 @@ export function ApiClientWorkbench({
     setIsSending(false);
 
     if (result.error) {
+      // Shown inline in the response panel; no toast so the message isn't duplicated.
       setRequestError(result.error);
       setRequestStatus("");
-      toast.error(result.error);
       return;
     }
 
@@ -410,6 +411,20 @@ export function ApiClientWorkbench({
     useProxy,
     workspaceId
   ]);
+
+  // Ctrl/⌘+Enter sends the current request from anywhere in the workbench.
+  const sendRef = useRef(sendRequest);
+  sendRef.current = sendRequest;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      event.preventDefault();
+      void sendRef.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const handleSaveExchangeClick = useCallback(() => {
     if (!selectedRequest || !requestResponse.trim()) return;
@@ -494,7 +509,7 @@ export function ApiClientWorkbench({
             mergeParamRowsInput(
               serializeParamRecord(snap.queryParams, { defaultEnabled: true }),
               scaffold.queryParams,
-              { defaultEnabled: false }
+              { defaultEnabled: false, requiredKeys: requiredQueryKeys(linkedOperation) }
             )
           )
         );
@@ -755,6 +770,7 @@ export function ApiClientWorkbench({
                       className={`request-send-btn request-send-btn--${selectedRequest.method.toLowerCase()}`}
                       onClick={() => void sendRequest()}
                       disabled={isSending}
+                      title={`Send (${/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl"}+Enter)`}
                     >
                       {isSending ? "Sending…" : "Send"}
                     </button>
