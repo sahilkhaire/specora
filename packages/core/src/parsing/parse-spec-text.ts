@@ -1,6 +1,6 @@
 import YAML from "yaml";
-import SwaggerParser from "@apidevtools/swagger-parser";
 import { detectSpecVersion, type DetectedSpecVersion } from "./detect-spec-version.js";
+import { validateSpec } from "./swagger-parser.js";
 
 function processGoTemplate(input: string): string {
   let processed = input;
@@ -31,11 +31,12 @@ function parseTextInput(value: string): Record<string, unknown> {
     throw new Error("Spec input is empty.");
   }
 
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-    return JSON.parse(trimmed) as Record<string, unknown>;
+  const parsed: unknown =
+    trimmed.startsWith("{") || trimmed.startsWith("[") ? JSON.parse(trimmed) : YAML.parse(trimmed);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Spec must be a JSON or YAML object, not a scalar or list.");
   }
-
-  return YAML.parse(trimmed) as Record<string, unknown>;
+  return parsed as Record<string, unknown>;
 }
 
 export type ParseSpecTextResult =
@@ -83,7 +84,7 @@ export async function parseSpecTextAsync(input: string): Promise<ParseSpecTextRe
     const version = detectSpecVersion(parsed);
 
     try {
-      await SwaggerParser.validate(parsed as unknown as Parameters<typeof SwaggerParser.validate>[0]);
+      await validateSpec(parsed);
     } catch (validationError) {
       const message =
         validationError instanceof Error ? validationError.message : "Validation failed";

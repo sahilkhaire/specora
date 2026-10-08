@@ -111,3 +111,30 @@ test("summarizeSpec returns title, version, path count, and sorted tags", () => 
   assert.equal(summary.endpointCount, 2);
   assert.deepEqual(summary.tags, ["pets", "system", "write"]);
 });
+
+test("validation does not mutate recursive schemas into circular objects", async () => {
+  const text = JSON.stringify({
+    openapi: "3.0.0",
+    info: { title: "Tree", version: "1" },
+    paths: {
+      "/nodes": {
+        get: {
+          responses: {
+            "200": { description: "ok", content: { "application/json": { schema: { $ref: "#/components/schemas/Node" } } } }
+          }
+        }
+      }
+    },
+    components: { schemas: { Node: { type: "object", properties: { child: { $ref: "#/components/schemas/Node" } } } } }
+  });
+  const result = await parseAndValidateSpec({ sourceType: "text", value: text });
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.doesNotThrow(() => JSON.stringify(result.spec));
+  }
+});
+
+test("rejects YAML that is not an object", async () => {
+  const result = await parseAndValidateSpec({ sourceType: "text", value: "just a string" });
+  assert.equal(result.ok, false);
+});

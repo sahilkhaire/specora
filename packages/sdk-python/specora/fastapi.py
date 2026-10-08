@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from html import escape
 
 
 def _read_spec(spec_path: str) -> dict[str, Any]:
@@ -33,12 +34,16 @@ def mount_specora(app: FastAPI, spec_path: str, path: str = "/api-docs") -> None
     @router.get(mount)
     @router.get(f"{mount}/")
     async def docs_ui(request: Request) -> HTMLResponse:
+        spec_url = f"{mount}/openapi.json"
+        config = json.dumps({"surface": "embed", "specUrl": spec_url, "mountPath": mount})
+        # Keep the inline JSON from closing the <script> element.
+        config = config.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
         html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"/><title>Specora Docs</title></head>
 <body>
   <p>Specora Python mount is active. Install <code>@specora/node</code> for full CDN UI, or load embed bundle manually.</p>
-  <p>Spec URL: <a href="{mount}/openapi.json">{mount}/openapi.json</a></p>
-  <script>window.__SPECORA_EMBED__={{surface:"embed",specUrl:"{mount}/openapi.json",mountPath:"{mount}"}};</script>
+  <p>Spec URL: <a href="{escape(spec_url)}">{escape(spec_url)}</a></p>
+  <script>window.__SPECORA_EMBED__={config};</script>
 </body></html>"""
         return HTMLResponse(html)
 

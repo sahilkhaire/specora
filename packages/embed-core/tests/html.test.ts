@@ -27,4 +27,16 @@ describe("buildBootstrapHtml", () => {
     assert.match(html, /"downloadJsonUrl":"\/api-docs\/openapi\.json"/);
     assert.doesNotMatch(html, /downloadYamlUrl/);
   });
+
+  it("escapes values that could close the inline script", () => {
+    const html = buildBootstrapHtml("<html><head></head><body></body></html>", {
+      specPath: "./openapi.json",
+      specUrl: "/docs/</script><script>alert(1)</script>",
+      mountPath: "/docs",
+    });
+
+    assert.doesNotMatch(html, /<\/script><script>alert/);
+    const config = html.match(/__SPECORA_EMBED__=(.*?);<\/script>/)?.[1] ?? "";
+    assert.equal(JSON.parse(config).specUrl, "/docs/</script><script>alert(1)</script>");
+  });
 });

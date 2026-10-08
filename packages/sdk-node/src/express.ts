@@ -50,9 +50,10 @@ export function specoraDocs(options: SpecoraDocsOptions): RequestHandler {
   }
 
   return async function specoraDocsMiddleware(req: Request, res: Response, next: NextFunction) {
-    const url = req.url.split("?")[0] ?? "";
+    // Works both as app.use(specoraDocs(...)) and app.use("/prefix", specoraDocs(...)).
+    const url = `${req.baseUrl ?? ""}${req.url.split("?")[0] ?? ""}`;
 
-    if (url === `${mountPath}/openapi.json` || url === "/openapi.json") {
+    if (url === `${mountPath}/openapi.json`) {
       try {
         if (!specCache) {
           specCache = await readSpecFile(options.specPath);
@@ -70,7 +71,7 @@ export function specoraDocs(options: SpecoraDocsOptions): RequestHandler {
 
     if (
       downloadYamlUrl &&
-      (url === `${mountPath}/openapi.yaml` || url === "/openapi.yaml")
+      url === `${mountPath}/openapi.yaml`
     ) {
       try {
         const raw = await readFile(options.specPath, "utf8");
@@ -85,12 +86,19 @@ export function specoraDocs(options: SpecoraDocsOptions): RequestHandler {
       }
     }
 
-    if (url === mountPath || url === `${mountPath}/` || url === "/") {
+    if (url === mountPath || url === `${mountPath}/`) {
       if (!cachedHtml) {
-        await loadAssets();
+        try {
+          await loadAssets();
+        } catch (error) {
+          // Express 4 does not catch rejected promises from middleware; answer here instead of crashing.
+          console.error("[specora] Failed to load embed assets:", error);
+          res.status(503).type("text/plain").send("Specora docs are temporarily unavailable.");
+          return;
+        }
       }
       res.setHeader("content-type", "text/html; charset=utf-8");
-      res.send(cachedHtml ?? "<html><body>Specora embed loading…</body></html>");
+      res.send(cachedHtml);
       return;
     }
 

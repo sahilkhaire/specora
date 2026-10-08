@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { summarizeSpec } from "@specora/core";
+import { escapeHtml } from "../utils/html.js";
 import { parseFromFile } from "../utils/io.js";
 
 interface DocsCommandOptions {
@@ -33,13 +34,13 @@ export function registerDocsCommand(program: Command): void {
       const port = Number(options.port);
 
       const server = createServer((req, res) => {
-        const url = req.url ?? "/";
+        const url = (req.url ?? "/").split("?")[0] ?? "/";
         if (url === mount || url === `${mount}/`) {
           res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
           res.end(`<!doctype html>
 <html><head><meta charset="utf-8"/><title>Specora Docs</title></head>
 <body>
-  <p>Specora docs CLI preview. Mount: ${mount}</p>
+  <p>Specora docs CLI preview. Mount: ${escapeHtml(mount)}</p>
   <p>Endpoints: ${summary.endpointCount}</p>
   <p>Run <code>specora serve</code> for the full interactive UI, or use @specora/sdk-node in your app.</p>
 </body></html>`);

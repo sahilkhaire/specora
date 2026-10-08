@@ -10,7 +10,8 @@ export function registerServeCommand(program: Command): void {
     .description("Serve a local OpenAPI HTML preview")
     .argument("<specPath>", "Path to spec file")
     .option("-p, --port <port>", "Port", "4173")
-    .action(async (specPath, options: { port: string }) => {
+    .option("--host <host>", "Bind host", "127.0.0.1")
+    .action(async (specPath, options: { port: string; host: string }) => {
       const { result } = await parseFromFile(specPath);
       if (!result.ok) {
         console.error(`Serve failed: ${result.error.message}`);
@@ -21,6 +22,6 @@ export function registerServeCommand(program: Command): void {
       const summary = summarizeSpec(result.spec);
       const html = generatePreviewHtml({ summary, spec: result.spec });
       const port = Number.parseInt(options.port, 10);
-      startPreviewServer(port, html);
+      startPreviewServer(port, html, options.host);
     });
 }

@@ -15,6 +15,16 @@ function rewriteEmbedAssetURLs(indexHtml: string, options: EmbedCoreOptions & { 
     .replaceAll('href="/assets/', `href="${prefix}assets/`);
 }
 
+/** JSON that is safe to place inside an inline <script> (no `</script>` or HTML comment breakouts). */
+export function serializeForInlineScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 export function buildBootstrapHtml(
   indexHtml: string,
   options: EmbedCoreOptions & { specUrl: string; mountPath: string }
@@ -32,7 +42,7 @@ export function buildBootstrapHtml(
     config.downloadYamlUrl = options.downloadYamlUrl;
   }
 
-  const injection = `<script>window.__SPECORA_EMBED__=${JSON.stringify(config)};</script>`;
+  const injection = `<script>window.__SPECORA_EMBED__=${serializeForInlineScript(config)};</script>`;
   const html = rewriteEmbedAssetURLs(indexHtml, options);
 
   if (html.includes("</head>")) {

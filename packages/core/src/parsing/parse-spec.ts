@@ -1,6 +1,6 @@
-import SwaggerParser from "@apidevtools/swagger-parser";
 import YAML from "yaml";
 import { detectSpecVersion } from "./detect-spec-version.js";
+import { bundleSpec, validateSpec } from "./swagger-parser.js";
 import type { ParseSpecOptions, ParseSpecResult } from "../types/spec-types.js";
 
 function parseTextInput(value: string): Record<string, unknown> {
@@ -13,7 +13,11 @@ function parseTextInput(value: string): Record<string, unknown> {
     return JSON.parse(trimmed) as Record<string, unknown>;
   }
 
-  return YAML.parse(trimmed) as Record<string, unknown>;
+  const parsed: unknown = YAML.parse(trimmed);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Spec must be a JSON or YAML object.");
+  }
+  return parsed as Record<string, unknown>;
 }
 
 function normalizeSpec(spec: Record<string, unknown>): Record<string, unknown> {
@@ -41,11 +45,10 @@ export async function parseAndValidateSpec(options: ParseSpecOptions): Promise<P
     let loaded: Record<string, unknown>;
 
     if (options.sourceType === "url") {
-      const bundled = (await SwaggerParser.bundle(options.value)) as Record<string, unknown>;
-      loaded = bundled;
+      loaded = await bundleSpec(options.value);
     } else {
       loaded = parseTextInput(options.value);
-      await SwaggerParser.validate(loaded as any);
+      await validateSpec(loaded);
     }
 
     const version = detectSpecVersion(loaded);

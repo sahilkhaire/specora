@@ -135,3 +135,43 @@ test("proxy maps network failure to deterministic 502 payload", async () => {
     await stopServer(proxyServer);
   }
 });
+
+test("proxy rejects browser origins that are not allowed", async () => {
+  const proxyServer = startProxyServer(0);
+  const proxyPort = await getListeningPort(proxyServer);
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${proxyPort}/proxy`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://evil.example" },
+      body: JSON.stringify({ url: "http://127.0.0.1:9/", method: "GET" })
+    });
+    assert.equal(response.status, 403);
+    assert.equal(response.headers.get("access-control-allow-origin"), null);
+  } finally {
+    await stopServer(proxyServer);
+  }
+});
+
+test("proxy allows the hosted app, localhost, and extra origins, including PNA preflight", async () => {
+  const proxyServer = startProxyServer({ port: 0, allowedOrigins: ["https://specora.varcore.dev", "https://docs.acme.dev"] });
+  const proxyPort = await getListeningPort(proxyServer);
+
+  try {
+    for (const origin of ["https://specora.varcore.dev", "http://localhost:5173", "https://docs.acme.dev"]) {
+      const preflight = await fetch(`http://127.0.0.1:${proxyPort}/proxy`, {
+        method: "OPTIONS",
+        headers: {
+          origin,
+          "access-control-request-method": "POST",
+          "access-control-request-private-network": "true"
+        }
+      });
+      assert.equal(preflight.status, 204, origin);
+      assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
+      assert.equal(preflight.headers.get("access-control-allow-private-network"), "true");
+    }
+  } finally {
+    await stopServer(proxyServer);
+  }
+});
