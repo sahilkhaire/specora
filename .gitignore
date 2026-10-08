@@ -7,3 +7,9 @@ coverage/
 .DS_Store
 *.log
 .vscode/*
+dist-embed/
+*.db
+*.db-shm
+*.db-wal
+.env.local
+.env.*.local

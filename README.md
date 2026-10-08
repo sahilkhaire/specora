@@ -114,12 +114,22 @@ npx specora proxy --port 8787
 
 In the web UI Try Out section, enable **Proxy** and set the URL to `http://localhost:8787/proxy`. Try-out defaults to direct mode (browser → target API); the local CLI proxy is the only CORS bypass on hosted SaaS — request data never passes through Specora's servers.
 
+The proxy binds to `127.0.0.1` and only accepts browser requests from localhost and the hosted app (`https://specora.varcore.dev`), so other websites you visit cannot use it to reach your local network. If you self-host the web UI elsewhere, allow its origin explicitly:
+
+```bash
+npx specora proxy --port 8787 --allow-origin https://docs.example.com
+```
+
 ## Workspace Layout
 
 - `apps/web`: React + Vite frontend
 	- `src/app`: application composition and top-level screens
 	- `src/features`: feature modules (spec parsing, try-out, etc.)
 	- `src/shared`: shared styles and common UI helpers
+- `apps/api`: optional Hono + SQLite backend (accounts and sync, published docs, admin, self-hosted try-out proxy)
+	- `src/routes`: HTTP routes; `src/services`: shared domain logic
+	- `src/http`: errors, validation, rate limiting, SSRF-safe outbound fetch
+	- `src/db`: schema and versioned migrations (`PRAGMA user_version`)
 - `packages/core`: shared OpenAPI parsing and normalization
 	- `src/parsing`: parsing and validation pipeline
 	- `src/summarization`: summary and metadata extraction
@@ -140,12 +150,10 @@ In the web UI Try Out section, enable **Proxy** and set the URL to `http://local
 
 ## Testing
 
-Run all checks:
+Run all checks (lint, architecture boundaries, tests, build) from a clean clone:
 
 ```bash
-npm run lint
-npm run build
-npm run test
+npm run check
 ```
 
 Run web-proxy contract smoke checks:
@@ -164,6 +172,30 @@ Production builds use `apps/web/.env.production` (embed CDN, platform docs domai
 npm run publish:embed-cdn
 # then sync dist/embed/ to your static host under /embed/
 ```
+
+## Self-hosting
+
+`docker compose up --build` runs the web UI on `http://localhost:5173` and the API on `http://localhost:8788`. Web settings are compiled in at build time (`VITE_*` build args); API settings are read from the environment at startup.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | `file:./specora.db` | SQLite file. Migrations run automatically on start. |
+| `CORS_ORIGIN` | hosted app + `http://localhost:5173` | Comma-separated browser origins allowed to call the API with cookies. |
+| `COOKIE_SECURE` | `true` when `NODE_ENV=production` | Set `false` only for plain-HTTP intranet installs. |
+| `COOKIE_DOMAIN` | unset | Share the session cookie across subdomains. |
+| `SPECORA_ADMIN_PASSWORD` | unset | Enables `/admin/*`. Admin is disabled without it; there is no default password. |
+| `PROXY_ENABLED` | `false` | Enables `POST /proxy` for server-side try-out. |
+| `PROXY_ALLOW_PRIVATE_NETWORKS` | `false` | Allow the proxy and admin spec refresh to reach private/loopback addresses. |
+| `PLATFORM_DOCS_DOMAIN` | `docs.varcore.dev` | Parent domain for published docs (`<slug>.<domain>`). |
+| `PUBLISH_AUTO_VERIFY_CUSTOM_DOMAINS` | `false` | Serve custom domains without verification (single-tenant installs only). |
+| `TRUST_PROXY` | `false` | Use `X-Forwarded-For` for rate limiting when behind a trusted reverse proxy. |
+| `SPECORA_MAX_BODY_BYTES` | 20 MB | Request body limit (specs are stored inline). |
+
+Security notes for operators:
+
+- Passwords are hashed with scrypt; session and admin tokens are stored only as SHA-256 hashes.
+- Sign-in endpoints are rate limited per IP in process memory. Put a shared limiter in front of multi-instance deployments.
+- The try-out proxy re-validates the resolved IP of every connection and redirect, so DNS names pointing at private ranges or cloud metadata (`169.254.169.254`) are refused unless `PROXY_ALLOW_PRIVATE_NETWORKS=true`.
 
 ## Cloudflare Pages Deployment
 

@@ -1,3 +1,5 @@
+# Self-hosted (enterprise) stack: web UI on :5173, API on :8788.
+#   SPECORA_ADMIN_PASSWORD=... docker compose up --build
 services:
   api:
     build:
@@ -8,26 +10,36 @@ services:
     environment:
       PORT: "8788"
       DATABASE_URL: "file:/data/specora.db"
-      CORS_ORIGIN: "http://localhost:5173,http://localhost:80"
-      # Self-hosted enterprise only: POST /proxy for try-out CORS bypass (disabled on hosted SaaS API).
+      CORS_ORIGIN: "http://localhost:5173"
+      # Plain HTTP on localhost; set to "true" (or remove) once served over HTTPS.
+      COOKIE_SECURE: "false"
+      # Self-hosted only: POST /proxy relays try-out requests server-side (CORS bypass).
       PROXY_ENABLED: "true"
-      SPECORA_ADMIN_PASSWORD: "${SPECORA_ADMIN_PASSWORD:-specora-admin}"
-      INSTANCE_BASE_DOMAIN: "${INSTANCE_BASE_DOMAIN:-localhost}"
+      # Allow try-out against internal services. Leave false if users are untrusted.
+      PROXY_ALLOW_PRIVATE_NETWORKS: "${PROXY_ALLOW_PRIVATE_NETWORKS:-false}"
+      # Admin routes stay disabled unless this is set. There is no default password.
+      SPECORA_ADMIN_PASSWORD: "${SPECORA_ADMIN_PASSWORD:-}"
+      PLATFORM_DOCS_DOMAIN: "${PLATFORM_DOCS_DOMAIN:-localhost}"
+      # Single-tenant installs trust their users' custom domains.
+      PUBLISH_AUTO_VERIFY_CUSTOM_DOMAINS: "true"
     volumes:
       - api-data:/data
+    restart: unless-stopped
 
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        VITE_DEPLOYMENT_MODE: "${VITE_DEPLOYMENT_MODE:-enterprise}"
+        VITE_API_BASE_URL: "http://localhost:8788"
+        VITE_ENABLE_SAAS_AUTH: "${VITE_ENABLE_SAAS_AUTH:-false}"
+        VITE_TRYOUT_PROXY_URL: "http://localhost:8788/proxy"
     ports:
-      - "5173:80"
-    environment:
-      VITE_API_BASE_URL: "http://localhost:8788"
-      VITE_DEPLOYMENT_MODE: "${VITE_DEPLOYMENT_MODE:-enterprise}"
-      VITE_ENABLE_SAAS_AUTH: "false"
+      - "5173:8080"
     depends_on:
       - api
+    restart: unless-stopped
 
 volumes:
   api-data:

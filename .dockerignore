@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/dist-embed
+**/coverage
+**/*.db
+**/*.db-*
+.git
+.github
+docs/images
+scripts/screenshot-deps
+plan

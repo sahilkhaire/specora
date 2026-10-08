@@ -5,10 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-lint-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -23,22 +30,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build workspace types for web resolution
-        run: |
-          npm run -w @specora/core build
-          npm run -w @specora/import-postman build
-
       - name: Lint
         run: npm run lint
 
       - name: Architecture boundaries
         run: npm run check:boundaries
 
+      - name: Test
+        run: npm run test
+
       - name: Build
         run: npm run build
 
-      - name: Test
-        run: npm run test
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -49,6 +54,26 @@ jobs:
       - name: Test Go SDK
         working-directory: packages/sdk-go
         run: |
-          go mod tidy
+          test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
           go vet ./...
           go test ./...
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -f apps/api/Dockerfile -t specora-api:ci .
+
+      - name: Build web image
+        run: docker build -f apps/web/Dockerfile -t specora-web:ci .
+
+      - name: Smoke test API image
+        run: |
+          docker run -d --name api -p 8788:8788 specora-api:ci
+          for i in $(seq 1 20); do curl -fsS http://localhost:8788/health && exit 0; sleep 1; done
+          docker logs api
+          exit 1
