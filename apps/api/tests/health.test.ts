@@ -1,33 +1,31 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
-import { unlinkSync } from "node:fs";
-import path from "node:path";
-import { initDb } from "../src/db/client.js";
-import { ensureDefaultInstance } from "../src/routes/admin.js";
-import { createApp } from "../src/app.js";
+import { describe, it } from "node:test";
+import { Client, freshApp } from "./helpers.js";
 
-const testDbPath = path.join(process.cwd(), "tests", ".test-specora.db");
-
-before(() => {
-  process.env.DATABASE_URL = `file:${testDbPath}`;
-  initDb();
-});
-
-after(() => {
-  try {
-    unlinkSync(testDbPath);
-  } catch {
-    /* ignore */
-  }
-});
-
-describe("API health", () => {
-  it("returns ok", async () => {
-    await ensureDefaultInstance();
-    const app = createApp();
-    const response = await app.request("/health");
+describe("API basics", () => {
+  it("reports health with database status", async () => {
+    const client = new Client(await freshApp());
+    const response = await client.request("/health");
     assert.equal(response.status, 200);
-    const body = (await response.json()) as { ok: boolean };
-    assert.equal(body.ok, true);
+    assert.deepEqual(response.json, { ok: true, db: "up" });
+  });
+
+  it("returns JSON 404 for unknown routes", async () => {
+    const client = new Client(await freshApp());
+    const response = await client.request("/nope");
+    assert.equal(response.status, 404);
+    assert.equal(response.json.error, "Not found");
+  });
+
+  it("returns 400, not 500, for malformed JSON", async () => {
+    const client = new Client(await freshApp());
+    const response = await client.request("/auth/login", { method: "POST", body: "{not json" });
+    assert.equal(response.status, 400);
+  });
+
+  it("sets security headers", async () => {
+    const client = new Client(await freshApp());
+    const response = await client.request("/health");
+    assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   });
 });

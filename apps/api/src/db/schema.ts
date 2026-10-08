@@ -59,3 +59,9 @@ export const publishedSites = sqliteTable("published_sites", {
   customDomainVerifiedAt: text("custom_domain_verified_at"),
   isPublished: integer("is_published", { mode: "boolean" }).notNull().default(false),
 });
+
+export const adminSessions = sqliteTable("admin_sessions", {
+  id: text("id").primaryKey(),
+  instanceId: text("instance_id").notNull(),
+  expiresAt: text("expires_at").notNull(),
+});

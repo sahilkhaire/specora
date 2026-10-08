@@ -1,51 +1,67 @@
 import { Hono, type Context } from "hono";
 import { eq } from "drizzle-orm";
+import { parseSpecTextSync } from "@specora/core";
 import { db, schema } from "../db/client.js";
-import { hashPassword, verifyPassword } from "../auth/password.js";
-import { getCookie, setCookie } from "hono/cookie";
+import { hashPassword, needsRehash, verifyPassword } from "../auth/password.js";
+import { endAdminSession, getAdminInstanceId, revokeAllAdminSessions, startAdminSession } from "../auth/session.js";
+import { adminPassword, platformDocsDomain, proxyAllowPrivateNetworks, proxyMaxResponseBytes, proxyTimeoutMs } from "../config.js";
+import { ApiError, badRequest, notFound, unauthorized } from "../http/errors.js";
+import { rateLimit } from "../http/rate-limit.js";
+import { BlockedTargetError, TargetTimeoutError, safeFetch } from "../http/safe-fetch.js";
+import { optionalString, readJsonObject, requiredString } from "../http/validate.js";
 
-const ADMIN_COOKIE = "specora_admin";
+const VISIBILITIES = new Set(["private", "public"]);
+/** Stored when no admin password is configured; never matches any input. */
+const DISABLED_HASH = "!disabled";
 
-export const adminRoutes = new Hono();
-
-async function getDefaultInstance() {
-  const rows = await db.select().from(schema.instances).limit(1);
-  return rows[0] ?? null;
+function getDefaultInstance() {
+  return db.select().from(schema.instances).limit(1).get() ?? null;
 }
 
-adminRoutes.post("/admin/login", async (c) => {
-  const body = await c.req.json<{ password?: string }>();
-  const instance = await getDefaultInstance();
-  if (!instance || !verifyPassword(body.password ?? "", instance.adminPasswordHash)) {
-    return c.json({ error: "Invalid admin credentials." }, 401);
+function requireAdminEnabled(): void {
+  if (!adminPassword()) {
+    throw notFound("Admin is not enabled on this server.");
   }
+}
 
-  setCookie(c, ADMIN_COOKIE, instance.id, {
-    httpOnly: true,
-    sameSite: "Lax",
-    path: "/",
-    maxAge: 7 * 24 * 60 * 60,
-  });
-
-  return c.json({ ok: true });
-});
-
-async function requireAdmin(c: Context): Promise<string | Response> {
-  const instanceId = getCookie(c, ADMIN_COOKIE);
+function requireAdmin(c: Context): string {
+  requireAdminEnabled();
+  const instanceId = getAdminInstanceId(c);
   if (!instanceId) {
-    return c.json({ error: "Admin auth required." }, 401);
+    throw unauthorized("Admin auth required.");
   }
   return instanceId;
 }
 
-adminRoutes.get("/admin/instance", async (c) => {
-  const instanceId = await requireAdmin(c);
-  if (instanceId instanceof Response) return instanceId;
+export const adminRoutes = new Hono();
 
-  const rows = await db.select().from(schema.instances).where(eq(schema.instances.id, instanceId)).limit(1);
-  const instance = rows[0];
+adminRoutes.post(
+  "/admin/login",
+  rateLimit({ windowMs: 15 * 60 * 1000, max: 10, name: "admin sign-in" }),
+  async (c) => {
+    requireAdminEnabled();
+    const body = await readJsonObject(c);
+    const password = optionalString(body, "password", 256) ?? "";
+    const instance = getDefaultInstance();
+    if (!instance || !(await verifyPassword(password, instance.adminPasswordHash))) {
+      throw unauthorized("Invalid admin credentials.");
+    }
+
+    startAdminSession(c, instance.id);
+    return c.json({ ok: true });
+  }
+);
+
+adminRoutes.post("/admin/logout", (c) => {
+  endAdminSession(c);
+  return c.json({ ok: true });
+});
+
+adminRoutes.get("/admin/instance", (c) => {
+  const instanceId = requireAdmin(c);
+  const instance = db.select().from(schema.instances).where(eq(schema.instances.id, instanceId)).get();
   if (!instance) {
-    return c.json({ error: "Instance not found." }, 404);
+    throw notFound("Instance not found.");
   }
 
   return c.json({
@@ -57,72 +73,104 @@ adminRoutes.get("/admin/instance", async (c) => {
 });
 
 adminRoutes.put("/admin/instance", async (c) => {
-  const instanceId = await requireAdmin(c);
-  if (instanceId instanceof Response) return instanceId;
+  const instanceId = requireAdmin(c);
+  const body = await readJsonObject(c);
+  const name = optionalString(body, "name", 200)?.trim();
+  const visibility = optionalString(body, "visibility", 20);
+  const baseDomain = optionalString(body, "baseDomain", 253)?.trim().toLowerCase();
 
-  const body = await c.req.json<{
-    name?: string;
-    visibility?: string;
-    baseDomain?: string;
-  }>();
+  if (visibility !== undefined && !VISIBILITIES.has(visibility)) {
+    throw badRequest("Field 'visibility' must be 'private' or 'public'.");
+  }
 
-  await db
-    .update(schema.instances)
-    .set({
-      name: body.name,
-      visibility: body.visibility,
-      baseDomain: body.baseDomain,
-    })
-    .where(eq(schema.instances.id, instanceId));
+  const patch: Partial<typeof schema.instances.$inferInsert> = {};
+  if (name) patch.name = name;
+  if (visibility) patch.visibility = visibility;
+  if (baseDomain !== undefined) patch.baseDomain = baseDomain || null;
+  if (Object.keys(patch).length > 0) {
+    db.update(schema.instances).set(patch).where(eq(schema.instances.id, instanceId)).run();
+  }
 
   return c.json({ ok: true });
 });
 
 adminRoutes.post("/admin/spec/refresh", async (c) => {
-  const instanceId = await requireAdmin(c);
-  if (instanceId instanceof Response) return instanceId;
+  requireAdmin(c);
+  const body = await readJsonObject(c);
+  const workspaceId = requiredString(body, "workspaceId", 128);
+  const specUrl = requiredString(body, "specUrl", 4096);
 
-  const body = await c.req.json<{ workspaceId?: string; specUrl?: string }>();
-  if (!body.workspaceId || !body.specUrl) {
-    return c.json({ error: "workspaceId and specUrl required." }, 400);
+  const workspace = db.select({ id: schema.workspaces.id }).from(schema.workspaces).where(eq(schema.workspaces.id, workspaceId)).get();
+  if (!workspace) {
+    throw notFound("Workspace not found.");
   }
 
-  const response = await fetch(body.specUrl);
-  if (!response.ok) {
-    return c.json({ error: `Failed to fetch spec (HTTP ${response.status})` }, 502);
-  }
-
-  const text = await response.text();
-  let spec: Record<string, unknown>;
+  let text: string;
   try {
-    spec = text.trim().startsWith("{") ? JSON.parse(text) : JSON.parse(text);
-  } catch {
-    return c.json({ error: "Invalid spec format." }, 400);
+    const response = await safeFetch(specUrl, {
+      timeoutMs: proxyTimeoutMs(),
+      maxResponseBytes: proxyMaxResponseBytes(),
+      allowPrivateNetworks: proxyAllowPrivateNetworks(),
+      headers: { accept: "application/json, application/yaml;q=0.9, */*;q=0.5" },
+    });
+    if (response.status < 200 || response.status >= 300) {
+      throw new ApiError(502, `Failed to fetch spec (HTTP ${response.status}).`);
+    }
+    text = response.body;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    if (error instanceof BlockedTargetError) throw badRequest(error.message);
+    if (error instanceof TargetTimeoutError) throw new ApiError(504, error.message);
+    throw new ApiError(502, "Failed to fetch spec.");
   }
 
-  await db
-    .update(schema.workspaces)
+  const parsed = parseSpecTextSync(text);
+  if (!parsed.ok) {
+    throw badRequest(parsed.error);
+  }
+
+  db.update(schema.workspaces)
     .set({
-      specJson: JSON.stringify(spec),
-      specSourceJson: JSON.stringify({ type: "url", value: body.specUrl }),
+      specJson: JSON.stringify(parsed.spec),
+      specSourceJson: JSON.stringify({ type: "url", value: specUrl }),
       updatedAt: new Date().toISOString(),
     })
-    .where(eq(schema.workspaces.id, body.workspaceId));
+    .where(eq(schema.workspaces.id, workspaceId))
+    .run();
 
   return c.json({ ok: true });
 });
 
+/**
+ * Create the singleton instance row and keep its admin password in sync with
+ * `SPECORA_ADMIN_PASSWORD`, so rotating the env var rotates the credential.
+ */
 export async function ensureDefaultInstance(): Promise<void> {
-  const existing = await getDefaultInstance();
-  if (existing) return;
+  const password = adminPassword();
+  const existing = getDefaultInstance();
 
-  const adminPassword = process.env.SPECORA_ADMIN_PASSWORD ?? "specora-admin";
-  await db.insert(schema.instances).values({
-    id: crypto.randomUUID(),
-    name: "Default Instance",
-    visibility: "private",
-    baseDomain: process.env.INSTANCE_BASE_DOMAIN ?? "localhost",
-    adminPasswordHash: hashPassword(adminPassword),
-    createdAt: new Date().toISOString(),
-  });
+  if (!existing) {
+    db.insert(schema.instances)
+      .values({
+        id: crypto.randomUUID(),
+        name: "Default Instance",
+        visibility: "private",
+        baseDomain: platformDocsDomain(),
+        adminPasswordHash: password ? await hashPassword(password) : DISABLED_HASH,
+        createdAt: new Date().toISOString(),
+      })
+      .run();
+    return;
+  }
+
+  const upToDate = password
+    ? await verifyPassword(password, existing.adminPasswordHash)
+    : existing.adminPasswordHash === DISABLED_HASH;
+  if (upToDate && !(password && needsRehash(existing.adminPasswordHash))) return;
+
+  db.update(schema.instances)
+    .set({ adminPasswordHash: password ? await hashPassword(password) : DISABLED_HASH })
+    .where(eq(schema.instances.id, existing.id))
+    .run();
+  if (!upToDate) revokeAllAdminSessions();
 }

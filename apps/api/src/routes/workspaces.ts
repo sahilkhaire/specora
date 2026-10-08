@@ -1,239 +1,118 @@
-import { Hono, type Context } from "hono";
+import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../db/client.js";
-import { getUserIdFromRequest } from "../auth/session.js";
+import { requireUser } from "../auth/require-user.js";
+import { badRequest } from "../http/errors.js";
+import { isRecord, optionalArray, optionalString, parseStoredJson, readJsonObject } from "../http/validate.js";
+import {
+  MAX_WORKSPACES_PER_USER,
+  listUserWorkspaces,
+  parseWorkspaceList,
+  replaceUserWorkspaces,
+  replaceWorkflows,
+  requireOwnedWorkspace,
+  workspaceToJson,
+} from "../services/workspaces.js";
 
-function rowToWorkspace(row: typeof schema.workspaces.$inferSelect) {
-  return {
-    id: row.id,
-    name: row.name,
-    description: row.description ?? undefined,
-    specSource: row.specSourceJson ? JSON.parse(row.specSourceJson) : null,
-    spec: row.specJson ? JSON.parse(row.specJson) : null,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
+const MAX_WORKFLOWS = 500;
+const MAX_HISTORY_ENTRIES = 100;
+
+function activeWorkspaceId(userId: string): string {
+  return db.select().from(schema.userState).where(eq(schema.userState.userId, userId)).get()?.activeWorkspaceId ?? "";
 }
 
-async function requireUser(c: Context): Promise<string | Response> {
-  const userId = await getUserIdFromRequest(c);
-  if (!userId) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-  return userId;
+function listResponse(userId: string) {
+  return {
+    workspaces: listUserWorkspaces(userId).map(workspaceToJson),
+    activeWorkspaceId: activeWorkspaceId(userId),
+  };
 }
 
 export const workspacesRoutes = new Hono();
 
-workspacesRoutes.get("/", async (c) => {
-  const userId = await requireUser(c);
-  if (userId instanceof Response) return userId;
-
-  const rows = await db.select().from(schema.workspaces).where(eq(schema.workspaces.userId, userId));
-  const stateRows = await db.select().from(schema.userState).where(eq(schema.userState.userId, userId)).limit(1);
-
-  return c.json({
-    workspaces: rows.map(rowToWorkspace),
-    activeWorkspaceId: stateRows[0]?.activeWorkspaceId ?? "",
-  });
+workspacesRoutes.get("/", (c) => {
+  const userId = requireUser(c);
+  return c.json(listResponse(userId));
 });
 
 workspacesRoutes.put("/", async (c) => {
-  const userId = await requireUser(c);
-  if (userId instanceof Response) return userId;
+  const userId = requireUser(c);
+  const body = await readJsonObject(c);
+  const incoming = parseWorkspaceList(optionalArray(body, "workspaces", MAX_WORKSPACES_PER_USER));
 
-  const body = await c.req.json<{ workspaces?: unknown[] }>();
-  const list = Array.isArray(body.workspaces) ? body.workspaces : [];
-
-  await db.delete(schema.workspaces).where(eq(schema.workspaces.userId, userId));
-
-  for (const raw of list) {
-    if (!raw || typeof raw !== "object") continue;
-    const w = raw as Record<string, unknown>;
-    if (typeof w.id !== "string" || typeof w.name !== "string") continue;
-
-    await db.insert(schema.workspaces).values({
-      id: w.id,
-      userId,
-      instanceId: null,
-      name: w.name,
-      description: typeof w.description === "string" ? w.description : null,
-      specSourceJson: w.specSource ? JSON.stringify(w.specSource) : null,
-      specJson: w.spec ? JSON.stringify(w.spec) : null,
-      collectionJson:
-        typeof (w as { collectionJson?: string }).collectionJson === "string"
-          ? (w as { collectionJson: string }).collectionJson
-          : null,
-      historyJson:
-        typeof (w as { historyJson?: string }).historyJson === "string"
-          ? (w as { historyJson: string }).historyJson
-          : null,
-      createdAt: typeof w.createdAt === "string" ? w.createdAt : new Date().toISOString(),
-      updatedAt: typeof w.updatedAt === "string" ? w.updatedAt : new Date().toISOString(),
-    });
-  }
-
-  const rows = await db.select().from(schema.workspaces).where(eq(schema.workspaces.userId, userId));
-  const stateRows = await db.select().from(schema.userState).where(eq(schema.userState.userId, userId)).limit(1);
-
-  return c.json({
-    workspaces: rows.map(rowToWorkspace),
-    activeWorkspaceId: stateRows[0]?.activeWorkspaceId ?? "",
-  });
+  db.transaction((tx) => replaceUserWorkspaces(tx, userId, incoming));
+  return c.json(listResponse(userId));
 });
 
 workspacesRoutes.put("/active", async (c) => {
-  const userId = await requireUser(c);
-  if (userId instanceof Response) return userId;
+  const userId = requireUser(c);
+  const body = await readJsonObject(c);
+  const activeWorkspaceId = optionalString(body, "activeWorkspaceId", 128) ?? "";
 
-  const body = await c.req.json<{ activeWorkspaceId?: string }>();
-  const activeWorkspaceId = body.activeWorkspaceId ?? "";
-
-  await db
-    .insert(schema.userState)
-    .values({
-      userId,
-      activeWorkspaceId,
-      environmentsJson: "[]",
-      activeEnvironmentId: "",
-    })
-    .onConflictDoUpdate({
-      target: schema.userState.userId,
-      set: { activeWorkspaceId },
-    });
+  db.insert(schema.userState)
+    .values({ userId, activeWorkspaceId, environmentsJson: "[]", activeEnvironmentId: "" })
+    .onConflictDoUpdate({ target: schema.userState.userId, set: { activeWorkspaceId } })
+    .run();
 
   return c.json({ ok: true, activeWorkspaceId });
 });
 
-workspacesRoutes.get("/:workspaceId/workflows", async (c) => {
-  const userId = await requireUser(c);
-  if (userId instanceof Response) return userId;
+workspacesRoutes.get("/:workspaceId/workflows", (c) => {
+  const userId = requireUser(c);
+  const workspace = requireOwnedWorkspace(userId, c.req.param("workspaceId"));
 
-  const workspaceId = c.req.param("workspaceId");
-  const owned = await db
-    .select()
-    .from(schema.workspaces)
-    .where(eq(schema.workspaces.id, workspaceId))
-    .limit(1);
-
-  if (!owned[0] || owned[0].userId !== userId) {
-    return c.json({ error: "Not found" }, 404);
-  }
-
-  const rows = await db.select().from(schema.workflows).where(eq(schema.workflows.workspaceId, workspaceId));
-  const workflows = rows.map((row) => JSON.parse(row.payloadJson));
-
+  const rows = db.select().from(schema.workflows).where(eq(schema.workflows.workspaceId, workspace.id)).all();
+  const workflows = rows.map((row) => parseStoredJson<unknown>(row.payloadJson, null)).filter(Boolean);
   return c.json({ workflows });
 });
 
 workspacesRoutes.put("/:workspaceId/workflows", async (c) => {
-  const userId = await requireUser(c);
-  if (userId instanceof Response) return userId;
+  const userId = requireUser(c);
+  const workspace = requireOwnedWorkspace(userId, c.req.param("workspaceId"));
+  const body = await readJsonObject(c);
+  const workflows = optionalArray(body, "workflows", MAX_WORKFLOWS);
 
-  const workspaceId = c.req.param("workspaceId");
-  const owned = await db
-    .select()
-    .from(schema.workspaces)
-    .where(eq(schema.workspaces.id, workspaceId))
-    .limit(1);
-
-  if (!owned[0] || owned[0].userId !== userId) {
-    return c.json({ error: "Not found" }, 404);
-  }
-
-  const body = await c.req.json<{ workflows?: unknown[] }>();
-  const list = Array.isArray(body.workflows) ? body.workflows : [];
-
-  await db.delete(schema.workflows).where(eq(schema.workflows.workspaceId, workspaceId));
-
-  for (const raw of list) {
-    if (!raw || typeof raw !== "object") continue;
-    const w = raw as Record<string, unknown>;
-    if (typeof w.id !== "string") continue;
-    await db.insert(schema.workflows).values({
-      id: w.id,
-      workspaceId,
-      payloadJson: JSON.stringify(raw),
-    });
-  }
-
+  db.transaction((tx) => replaceWorkflows(tx, workspace.id, workflows));
   return c.json({ ok: true });
 });
 
-async function assertWorkspaceOwner(userId: string, workspaceId: string) {
-  const owned = await db
-    .select()
-    .from(schema.workspaces)
-    .where(eq(schema.workspaces.id, workspaceId))
-    .limit(1);
-  if (!owned[0] || owned[0].userId !== userId) {
-    return null;
-  }
-  return owned[0];
-}
-
-workspacesRoutes.get("/:workspaceId/collection", async (c) => {
-  const userId = await requireUser(c);
-  if (userId instanceof Response) return userId;
-
-  const workspaceId = c.req.param("workspaceId");
-  const row = await assertWorkspaceOwner(userId, workspaceId);
-  if (!row) return c.json({ error: "Not found" }, 404);
-
-  const collection = row.collectionJson ? JSON.parse(row.collectionJson) : null;
-  return c.json({ collection });
+workspacesRoutes.get("/:workspaceId/collection", (c) => {
+  const userId = requireUser(c);
+  const workspace = requireOwnedWorkspace(userId, c.req.param("workspaceId"));
+  return c.json({ collection: parseStoredJson<unknown>(workspace.collectionJson, null) });
 });
 
 workspacesRoutes.put("/:workspaceId/collection", async (c) => {
-  const userId = await requireUser(c);
-  if (userId instanceof Response) return userId;
+  const userId = requireUser(c);
+  const workspace = requireOwnedWorkspace(userId, c.req.param("workspaceId"));
+  const body = await readJsonObject(c);
+  const collection = body.collection ?? null;
+  if (collection !== null && !isRecord(collection)) {
+    throw badRequest("Field 'collection' must be an object or null.");
+  }
 
-  const workspaceId = c.req.param("workspaceId");
-  const row = await assertWorkspaceOwner(userId, workspaceId);
-  if (!row) return c.json({ error: "Not found" }, 404);
-
-  const body = await c.req.json<{ collection?: unknown }>();
-  await db
-    .update(schema.workspaces)
-    .set({
-      collectionJson: body.collection ? JSON.stringify(body.collection) : null,
-      updatedAt: new Date().toISOString(),
-    })
-    .where(eq(schema.workspaces.id, workspaceId));
-
+  db.update(schema.workspaces)
+    .set({ collectionJson: collection ? JSON.stringify(collection) : null, updatedAt: new Date().toISOString() })
+    .where(eq(schema.workspaces.id, workspace.id))
+    .run();
   return c.json({ ok: true });
 });
 
-workspacesRoutes.get("/:workspaceId/history", async (c) => {
-  const userId = await requireUser(c);
-  if (userId instanceof Response) return userId;
-
-  const workspaceId = c.req.param("workspaceId");
-  const row = await assertWorkspaceOwner(userId, workspaceId);
-  if (!row) return c.json({ error: "Not found" }, 404);
-
-  const history = row.historyJson ? JSON.parse(row.historyJson) : [];
-  return c.json({ history });
+workspacesRoutes.get("/:workspaceId/history", (c) => {
+  const userId = requireUser(c);
+  const workspace = requireOwnedWorkspace(userId, c.req.param("workspaceId"));
+  return c.json({ history: parseStoredJson<unknown[]>(workspace.historyJson, []) });
 });
 
 workspacesRoutes.put("/:workspaceId/history", async (c) => {
-  const userId = await requireUser(c);
-  if (userId instanceof Response) return userId;
+  const userId = requireUser(c);
+  const workspace = requireOwnedWorkspace(userId, c.req.param("workspaceId"));
+  const body = await readJsonObject(c);
+  const history = optionalArray(body, "history", 1000).filter(isRecord).slice(0, MAX_HISTORY_ENTRIES);
 
-  const workspaceId = c.req.param("workspaceId");
-  const row = await assertWorkspaceOwner(userId, workspaceId);
-  if (!row) return c.json({ error: "Not found" }, 404);
-
-  const body = await c.req.json<{ history?: unknown[] }>();
-  const list = Array.isArray(body.history) ? body.history : [];
-
-  await db
-    .update(schema.workspaces)
-    .set({
-      historyJson: JSON.stringify(list),
-      updatedAt: new Date().toISOString(),
-    })
-    .where(eq(schema.workspaces.id, workspaceId));
-
+  db.update(schema.workspaces)
+    .set({ historyJson: JSON.stringify(history), updatedAt: new Date().toISOString() })
+    .where(eq(schema.workspaces.id, workspace.id))
+    .run();
   return c.json({ ok: true });
 });
