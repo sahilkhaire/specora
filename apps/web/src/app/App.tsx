@@ -24,6 +24,7 @@ import { useWorkspaces } from "@/features/workspaces/use-workspaces";
 import type { SpecSource } from "@/features/workspaces/workspace-types";
 import { fetchPublishedSpec, fetchSpecFromUrl, type LoadedSpec } from "@/features/spec/load-spec";
 import { SpecImportDialog } from "@/features/spec/SpecImportDialog";
+import { sampleSpecUrl } from "@/features/spec/sample-spec";
 import { ApiClientWorkbench } from "@/app/ApiClientWorkbench";
 import { AppHeader } from "@/app/AppHeader";
 import type { WorkbenchHeaderConfig } from "@/app/header-types";
@@ -169,6 +170,13 @@ export function App() {
     [createEnvironment]
   );
 
+  const loadSample = useCallback(() => {
+    const url = sampleSpecUrl();
+    fetchSpecFromUrl(url)
+      .then((loaded) => handleSpecLoaded(loaded, { type: "url", value: url }))
+      .catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Failed to load sample."));
+  }, [handleSpecLoaded]);
+
   const info = (spec?.info as Record<string, unknown> | undefined) ?? {};
   const hostedApp = !isSdkEmbeddedContext() && Boolean(deploymentConfig.apiBaseUrl);
   // Publishing needs the workspace to exist server-side, i.e. a signed-in (synced) account.
@@ -218,14 +226,23 @@ export function App() {
       <EmptyState
         title="No API loaded"
         description="Import an OpenAPI or Swagger spec to explore and call its endpoints."
-        action={allowImportSpec ? <Button onClick={openSpecLoader}>Import OpenAPI spec</Button> : undefined}
+        action={
+          allowImportSpec ? (
+            <div className="ui-empty-state-actions">
+              <Button onClick={openSpecLoader}>Import OpenAPI spec</Button>
+              <Button variant="secondary" onClick={loadSample}>
+                Try the Petstore sample
+              </Button>
+            </div>
+          ) : undefined
+        }
       />
     );
   }
 
   return (
     <div className="app-shell app-shell-with-header">
-      <Toaster richColors position="top-right" theme={resolvedTheme} />
+      <Toaster richColors position="bottom-right" theme={resolvedTheme} />
       <AppHeader
         apiTitle={String(info.title ?? "No API loaded")}
         apiVersion={String(info.version ?? "—")}
@@ -255,46 +272,24 @@ export function App() {
         <main className={`main-panel ${spec ? "main-panel-client" : ""}`}>{renderMain()}</main>
       </div>
 
-      {showSettings && (
-        <div className="spec-loader-overlay" onClick={() => setShowSettings(false)}>
-          <div
-            className="spec-loader-panel settings-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="settings-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="spec-loader-header">
-              <h2 id="settings-title">Settings</h2>
-              <button type="button" className="close-btn" onClick={() => setShowSettings(false)} aria-label="Close">
-                ✕
-              </button>
-            </div>
-            <div className="spec-loader-content">
-              <SettingsView
-                spec={spec}
-                useProxy={useProxy}
-                proxyUrl={proxyUrl}
-                themeMode={themeMode}
-                resolvedTheme={resolvedTheme}
-                onThemeModeChange={setThemeMode}
-                onProxyChange={(use, url) => {
-                  setUseProxy(use);
-                  setProxyUrl(url);
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      <SettingsView
+        open={showSettings}
+        onOpenChange={setShowSettings}
+        useProxy={useProxy}
+        proxyUrl={proxyUrl}
+        themeMode={themeMode}
+        onThemeModeChange={setThemeMode}
+        onProxyChange={(use, url) => {
+          setUseProxy(use);
+          setProxyUrl(url);
+        }}
+      />
 
       {showSpecLoader && allowImportSpec && (
         <SpecImportDialog
           key={activeWorkspaceId}
           required={needsSpecImport}
           initialSource={activeWorkspace?.specSource ?? null}
-          currentSpec={spec}
-          operationCount={operations.length}
           onClose={closeSpecLoader}
           onLoaded={handleSpecLoaded}
         />

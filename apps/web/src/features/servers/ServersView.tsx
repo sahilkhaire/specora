@@ -47,99 +47,69 @@ export function resolveServerUrl(server: ServerEntry): string {
 export function ServersView({ spec, currentServerUrl, onServerUrlChange }: ServersViewProps) {
   const servers = listServers(spec);
 
-  if (!spec) {
-    return (
-      <div className="panel-card">
-        <h2>Servers</h2>
-        <p className="empty-message">Load a spec to view server configuration.</p>
-      </div>
-    );
-  }
-
-  if (!servers || servers.length === 0) {
-    return (
-      <div className="panel-card">
-        <h2>Servers</h2>
-        <p className="empty-message">No servers defined in this specification.</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="servers-view">
-      <div className="panel-card">
-        <h2>Servers</h2>
-        <p className="text-muted">
-          {servers.length} server(s) available for this API
-        </p>
-      </div>
-
-      <div className="panel-card">
-        <h3>Current Server</h3>
+    <div className="overview-section">
+      <label>
+        <span>Server used for requests</span>
         <input
-          type="text"
+          type="url"
           value={currentServerUrl}
           onChange={(e) => onServerUrlChange(e.target.value)}
           placeholder="https://api.example.com"
-          className="server-url-input"
         />
-        <p className="text-muted">
-          This URL will be used for Try It Out requests
-        </p>
-      </div>
+      </label>
 
-      <div className="panel-card">
-        <h3>Available Servers</h3>
-        <div className="servers-list">
-          {servers.map((server, idx) => {
-            const { url, description, variables } = server;
-
+      {servers.length === 0 ? (
+        <p className="empty-message">This specification doesn't declare any servers.</p>
+      ) : (
+        <ul className="overview-list">
+          {servers.map((server) => {
+            const resolved = resolveServerUrl(server);
+            const inUse = resolved === currentServerUrl;
+            const variables = server.variables ? Object.entries(server.variables) : [];
             return (
-              <div key={idx} className="server-item">
-                <div className="server-header">
-                  <code className="server-url">{url}</code>
-                  <button
-                    type="button"
-                    className="btn-secondary server-select-btn"
-                    onClick={() => onServerUrlChange(resolveServerUrl(server))}
-                  >
-                    Use This Server
-                  </button>
+              <li key={server.url} className="overview-list-item">
+                <div className="overview-list-row">
+                  <code>{server.url}</code>
+                  {inUse ? (
+                    <span className="overview-pill">In use</span>
+                  ) : (
+                    <button type="button" className="ui-btn ui-btn-secondary" onClick={() => onServerUrlChange(resolved)}>
+                      Use
+                    </button>
+                  )}
                 </div>
-
-                {description && <p className="server-description">{description}</p>}
-
-                {variables && Object.keys(variables).length > 0 && (
-                  <details className="server-variables">
-                    <summary>Variables ({Object.keys(variables).length})</summary>
-                    <table className="variables-table">
-                      <thead>
-                        <tr>
-                          <th>Variable</th>
-                          <th>Default</th>
-                          <th>Description</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.entries(variables).map(([varName, varDef]) => {
-                          const varObj = (varDef ?? {}) as Record<string, unknown>;
-                          return (
-                            <tr key={varName}>
-                              <td className="var-name">{`{${varName}}`}</td>
-                              <td className="var-default">{String(varObj.default || "")}</td>
-                              <td className="var-desc">{String(varObj.description || "")}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </details>
-                )}
-              </div>
+                {server.description ? <p className="help-text">{server.description}</p> : null}
+                {variables.length > 0 ? (
+                  <table className="overview-table">
+                    <thead>
+                      <tr>
+                        <th>Variable</th>
+                        <th>Default</th>
+                        <th>Description</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {variables.map(([name, definition]) => {
+                        const def = (definition ?? {}) as Record<string, unknown>;
+                        return (
+                          <tr key={name}>
+                            <td>
+                              <code>{`{${name}}`}</code>
+                            </td>
+                            <td>{String(def.default ?? "")}</td>
+                            <td>{String(def.description ?? "")}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                ) : null}
+              </li>
             );
           })}
-        </div>
-      </div>
+        </ul>
+      )}
     </div>
   );
 }

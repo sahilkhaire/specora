@@ -365,3 +365,12 @@ export function prettyResponseBody(raw: string): string {
     return raw;
   }
 }
+
+/** Path placeholders (`{id}` or `:id`) in `path` that have no value in `pathParams`. */
+export function missingPathParams(path: string, pathParams: Record<string, string>): string[] {
+  const names = new Set<string>();
+  for (const match of path.matchAll(/\{([^}/]+)\}|:([A-Za-z_][\w-]*)/g)) {
+    names.add((match[1] ?? match[2])!);
+  }
+  return [...names].filter((name) => !pathParams[name]?.trim());
+}

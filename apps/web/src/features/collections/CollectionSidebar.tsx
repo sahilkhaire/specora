@@ -5,6 +5,7 @@ import { Input } from "@/shared/ui/Input";
 import { Button } from "@/shared/ui/Button";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { IconPlus, IconUpload } from "@/shared/ui/icons";
+import { useShellNav } from "@/shared/ui/shell-nav";
 
 export interface FlatTreeRow {
   id: string;
@@ -105,6 +106,7 @@ export function CollectionSidebar({
   showCollectionActions = true
 }: CollectionSidebarProps) {
   const [filter, setFilter] = useState("");
+  const { showPane } = useShellNav();
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -160,7 +162,11 @@ export function CollectionSidebar({
           <button
             type="button"
             className="collection-tree-request"
-            onClick={() => row.requestId && onSelectRequest(row.requestId)}
+            onClick={() => {
+              if (!row.requestId) return;
+              onSelectRequest(row.requestId);
+              showPane("main");
+            }}
           >
             {row.method ? (
               <span className={`method-badge method-${row.method.toLowerCase()}`}>{row.method}</span>
@@ -210,21 +216,20 @@ export function CollectionSidebar({
             <>
               <button
                 type="button"
-                className="collection-sidebar-icon-btn"
+                className="collection-sidebar-icon-btn collection-sidebar-text-btn"
                 onClick={onNewRequest}
-                title="New request"
-                aria-label="New request"
               >
-                <IconPlus size={15} />
+                <IconPlus size={14} />
+                <span>New request</span>
               </button>
               <button
                 type="button"
-                className="collection-sidebar-icon-btn"
+                className="collection-sidebar-icon-btn collection-sidebar-text-btn"
                 onClick={onImportPostman}
-                title="Import Postman"
-                aria-label="Import Postman"
+                title="Import a Postman collection or environment"
               >
-                <IconUpload size={15} />
+                <IconUpload size={14} />
+                <span>Import</span>
               </button>
             </>
           ) : null}

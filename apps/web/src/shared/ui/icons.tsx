@@ -104,3 +104,48 @@ export function IconUpload(props: IconProps) {
     </svg>
   );
 }
+
+export function IconFolder(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </svg>
+  );
+}
+
+export function IconBook(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" />
+      <path d="M4 19V5" />
+      <path d="M8 7h7M8 11h7" />
+    </svg>
+  );
+}
+
+export function IconFlow(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <rect x="3" y="3" width="6" height="6" rx="1" />
+      <rect x="15" y="15" width="6" height="6" rx="1" />
+      <path d="M6 9v3a3 3 0 0 0 3 3h6" />
+    </svg>
+  );
+}
+
+export function IconGlobe(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+    </svg>
+  );
+}
+
+export function IconShield(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z" />
+    </svg>
+  );
+}

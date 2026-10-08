@@ -33,10 +33,10 @@ async function prepareDemoWorkspace(page) {
   });
 
   await page.getByRole("tab", { name: "Paste" }).click();
-  await page.locator(".spec-loader-panel textarea").fill(specText);
+  await page.getByRole("dialog").locator("textarea").fill(specText);
   await page.getByRole("button", { name: /parse pasted spec/i }).click();
 
-  await page.waitForSelector(".spec-loader-overlay", { state: "hidden", timeout: 30000 });
+  await page.getByRole("dialog").waitFor({ state: "hidden", timeout: 30000 });
 }
 
 async function waitForSpecLoaded(page) {
@@ -140,49 +140,37 @@ try {
   await prepareDemoWorkspace(page);
   await waitForSpecLoaded(page);
 
-  const workbenchReady = await page.locator(".main-panel-client").count();
-  if (workbenchReady > 0) {
-    await selectPetstoreRequest(page, /finds pets by status/i);
+  await selectPetstoreRequest(page, /finds pets by status/i);
 
-    await mockPetstoreResponse(page);
+  await mockPetstoreResponse(page);
 
-    await capture("ui-overview.png", page);
+  await capture("ui-overview.png", page);
 
-    const tryoutPanel = page.locator(".client-main-stack").first();
-    if (await tryoutPanel.count()) {
-      await capture("ui-tryout.png", page, { clip: await tryoutPanel.boundingBox() });
+  const tryoutPanel = page.locator(".client-main-stack").first();
+  if (await tryoutPanel.count()) {
+    await capture("ui-tryout.png", page, { clip: await tryoutPanel.boundingBox() });
+  }
+
+  const insightPanel = page.locator(".operation-insight-panel").first();
+  if (await insightPanel.count()) {
+    await capture("ui-schemas.png", page, { clip: await insightPanel.boundingBox() });
+  }
+
+  await sendSampleRequest(page);
+
+  const responsePanel = page.locator(".tryout-split-response").first();
+  if (await responsePanel.count()) {
+    const box = await responsePanel.boundingBox();
+    if (box) {
+      await capture("ui-response-viewer.png", page, { clip: box });
     }
+  }
 
-    const insightPanel = page.locator(".operation-insight-panel").first();
-    if (await insightPanel.count()) {
-      await capture("ui-schemas.png", page, { clip: await insightPanel.boundingBox() });
-    }
-
-    await sendSampleRequest(page);
-
-    const responsePanel = page.locator(".tryout-split-response").first();
-    if (await responsePanel.count()) {
-      const box = await responsePanel.boundingBox();
-      if (box) {
-        await capture("ui-response-viewer.png", page, { clip: box });
-      }
-    }
-
-    const workbenchWithResponse = page.locator(".main-panel-client").first();
-    if (await workbenchWithResponse.count()) {
-      await capture("ui-tryout-response.png", page, {
-        clip: await workbenchWithResponse.boundingBox(),
-      });
-    }
-  } else {
-    await capture("ui-overview.png", page);
-    const tagHeader = page.locator(".tag-header").first();
-    if (await tagHeader.count()) {
-      await tagHeader.click();
-      await page.locator(".operation-row").first().click();
-      await page.waitForTimeout(400);
-      await capture("ui-operation-detail.png", page);
-    }
+  const workbenchWithResponse = page.locator(".main-panel-client").first();
+  if (await workbenchWithResponse.count()) {
+    await capture("ui-tryout-response.png", page, {
+      clip: await workbenchWithResponse.boundingBox(),
+    });
   }
 } finally {
   await browser.close();

@@ -3,10 +3,12 @@ import { SchemasView } from "@/features/schemas/SchemasView";
 import { SecurityView } from "@/features/security/SecurityView";
 import { ServersView } from "@/features/servers/ServersView";
 import { Modal } from "@/shared/ui/Modal";
+import { ApiInfoView } from "./ApiInfoView";
 
-type Tab = "servers" | "security" | "schemas";
+type Tab = "info" | "servers" | "security" | "schemas";
 
 const TABS: Array<{ id: Tab; label: string }> = [
+  { id: "info", label: "Overview" },
   { id: "servers", label: "Servers" },
   { id: "security", label: "Security" },
   { id: "schemas", label: "Schemas" }
@@ -22,7 +24,7 @@ interface ApiOverviewDialogProps {
 
 /** Spec-wide reference: servers, security schemes, and component schemas. */
 export function ApiOverviewDialog({ open, onOpenChange, spec, serverUrl, onServerUrlChange }: ApiOverviewDialogProps) {
-  const [tab, setTab] = useState<Tab>("servers");
+  const [tab, setTab] = useState<Tab>("info");
 
   return (
     <Modal open={open} onOpenChange={onOpenChange} title="API overview" size="wide">
@@ -40,6 +42,7 @@ export function ApiOverviewDialog({ open, onOpenChange, spec, serverUrl, onServe
         ))}
       </div>
       <div role="tabpanel">
+        {tab === "info" ? <ApiInfoView spec={spec} /> : null}
         {tab === "servers" ? (
           <ServersView spec={spec} currentServerUrl={serverUrl} onServerUrlChange={onServerUrlChange} />
         ) : null}

@@ -111,29 +111,23 @@ export function AppHeader({
         ) : null}
       </div>
 
-      {!compact ? (
-        <div className="app-top-header-center">
-          {hasSpec ? (
-            <div className="app-top-header-api-meta">
-              <span className="app-top-header-api-title" title={apiTitle}>
-                {apiTitle}
-              </span>
-              <span className="app-top-header-api-version">v{apiVersion}</span>
-              {specVersionLabel ? <Badge tone="version">{specVersionLabel}</Badge> : null}
-            </div>
-          ) : (
-            <div className="app-top-header-api-meta app-top-header-api-meta--empty">
-              <span className="app-top-header-api-placeholder">No API loaded</span>
-            </div>
-          )}
-        </div>
-      ) : null}
+      <div className="app-top-header-center">
+        {hasSpec ? (
+          <div className="app-top-header-api-meta">
+            <span className="app-top-header-api-title" title={apiTitle}>
+              {apiTitle}
+            </span>
+            <span className="app-top-header-api-version">v{apiVersion}</span>
+            {specVersionLabel ? <Badge tone="version">{specVersionLabel}</Badge> : null}
+          </div>
+        ) : null}
+      </div>
 
       <nav className="app-top-header-toolbar" aria-label="Header actions">
         {workbench ? (
           <button
             type="button"
-            className={`app-top-header-icon-btn${workbench.schemaPanelOpen ? " app-top-header-icon-btn--active" : ""}`}
+            className={`app-top-header-icon-btn app-top-header-schema-toggle${workbench.schemaPanelOpen ? " app-top-header-icon-btn--active" : ""}`}
             onClick={workbench.onToggleSchemaPanel}
             aria-label={workbench.schemaPanelOpen ? "Hide schema panel" : "Show schema panel"}
             aria-pressed={workbench.schemaPanelOpen}

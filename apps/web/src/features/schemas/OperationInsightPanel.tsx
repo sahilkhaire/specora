@@ -81,6 +81,8 @@ export function OperationInsightPanel({
   );
 
   const primaryBodySchema = useMemo(() => getPrimaryRequestBodySchema(payloads), [payloads]);
+  const hasSampleSchemas =
+    payloads.requestBodies.some((slot) => slot.schema) || payloads.responses.some((slot) => slot.schema);
 
   return (
     <aside className="operation-insight-panel" aria-label="Operation reference">
@@ -126,6 +128,7 @@ export function OperationInsightPanel({
         </section>
       ) : null}
 
+      {hasSampleSchemas ? (
       <section className="insight-section">
         <div className="insight-section-head">
           <h3 className="insight-section-title">Payload templates</h3>
@@ -146,11 +149,9 @@ export function OperationInsightPanel({
             </button>
           </div>
         </div>
-        <p className="insight-hint">
-          Generated from the OpenAPI schema — empty uses type defaults; example prefers
-          spec examples and enums.
-        </p>
+        <p className="insight-hint">Empty uses type defaults; Example prefers spec examples and enums.</p>
       </section>
+      ) : null}
 
       {payloads.requestBodies.length > 0 ? (
         <section className="insight-section">

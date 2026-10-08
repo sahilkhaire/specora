@@ -17,7 +17,7 @@ import {
 import { sampleToJson } from "@/features/schemas/schema-samples";
 import { TryOutPanel } from "@/features/tryout/TryOutPanel";
 import { VariableHighlightInput } from "@/features/tryout/VariableHighlight";
-import { scaffoldFromOperation, parseRecordJson, methodBadgeClass, prettyResponseBody, applyVariables, resolveRequestUrl, resolveDisplayRequestUrl, stripUrlQuery, pathFromColonParams, type AuthType } from "@/features/tryout/tryout-utils";
+import { missingPathParams, scaffoldFromOperation, parseRecordJson, methodBadgeClass, prettyResponseBody, applyVariables, resolveRequestUrl, resolveDisplayRequestUrl, stripUrlQuery, pathFromColonParams, type AuthType } from "@/features/tryout/tryout-utils";
 import {
   mergeParamRowsInput,
   parseParamRowsToRecord,
@@ -342,6 +342,14 @@ export function ApiClientWorkbench({
         : { authType: undefined, authValue: undefined, authKeyName: undefined })
     };
 
+    const missing = missingPathParams(linkedOperation?.path ?? selectedRequest.url, draft.pathParams);
+    if (missing.length > 0) {
+      setRequestError(
+        `Fill in the path parameter${missing.length > 1 ? "s" : ""} ${missing.map((name) => `"${name}"`).join(", ")} before sending.`
+      );
+      return;
+    }
+
     setIsSending(true);
     setRequestError("");
     setRequestStatus("");
@@ -366,7 +374,6 @@ export function ApiClientWorkbench({
     setRequestTiming(result.durationMs);
     setRequestHeaders(result.responseHeaders);
     setRequestResponse(prettyResponseBody(result.responseBody));
-    toast.success(`Response ${result.status} in ${result.durationMs}ms`);
 
     const entry: RequestHistoryEntry = {
       id: `hist_${crypto.randomUUID().slice(0, 8)}`,
@@ -389,6 +396,7 @@ export function ApiClientWorkbench({
     authType,
     authValue,
     history,
+    linkedOperation,
     pathParamsInput,
     paramScaffold,
     persistDraft,
@@ -833,31 +841,26 @@ export function ApiClientWorkbench({
             )}
           </div>
         }
+        docsOpen={schemaPanelOpen}
         docs={
-          schemaPanelOpen
-            ? insightOperation
-              ? (
-                  <OperationInsightPanel
-                    spec={spec}
-                    operation={insightOperation}
-                    usedSchemas={usedSchemaDetails}
-                    onApplyRequestBody={(json) => {
-                      setRequestBody(json);
-                      if (selectedRequest) {
-                        updateRequest(selectedRequest.id, { body: { mode: "json", content: json } });
-                        toast.success("Request body updated from schema");
-                      }
-                    }}
-                  />
-                )
-              : (
-                  <div className="operation-insight-panel operation-insight-panel--empty">
-                    <p className="empty-message">
-                      Select a request to view schema reference and payload templates.
-                    </p>
-                  </div>
-                )
-            : undefined
+          insightOperation ? (
+            <OperationInsightPanel
+              spec={spec}
+              operation={insightOperation}
+              usedSchemas={usedSchemaDetails}
+              onApplyRequestBody={(json) => {
+                setRequestBody(json);
+                if (selectedRequest) {
+                  updateRequest(selectedRequest.id, { body: { mode: "json", content: json } });
+                  toast.success("Request body updated from schema");
+                }
+              }}
+            />
+          ) : (
+            <div className="operation-insight-panel operation-insight-panel--empty">
+              <p className="empty-message">Select a request to view schema reference and payload templates.</p>
+            </div>
+          )
         }
         history={
           historyOpen ? (

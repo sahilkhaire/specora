@@ -42,12 +42,12 @@ describe("CollectionSidebar", () => {
   it("shows collection action buttons by default", () => {
     render(<CollectionSidebar {...baseProps} />);
     expect(screen.getByRole("button", { name: "New request" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Import Postman" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import" })).toBeInTheDocument();
   });
 
   it("hides collection action buttons when showCollectionActions is false", () => {
     render(<CollectionSidebar {...baseProps} showCollectionActions={false} />);
     expect(screen.queryByRole("button", { name: "New request" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Import Postman" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Import" })).not.toBeInTheDocument();
   });
 });

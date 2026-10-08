@@ -12,30 +12,21 @@ export function SchemasView({ spec }: SchemasViewProps) {
 
   if (!spec) {
     return (
-      <div className="panel-card">
-        <h2>Schemas</h2>
-        <p className="empty-message">Load a spec to view schemas.</p>
-      </div>
+      <p className="empty-message">Load a spec to view schemas.</p>
     );
   }
 
   if (!schemas || Object.keys(schemas).length === 0) {
     return (
-      <div className="panel-card">
-        <h2>Schemas</h2>
-        <p className="empty-message">No schemas defined in this specification.</p>
-      </div>
+      <p className="empty-message">This specification doesn't define any reusable schemas.</p>
     );
   }
 
   return (
-    <div className="schemas-view">
-      <div className="panel-card">
-        <h2>Schemas</h2>
-        <p className="text-muted">
-          {Object.keys(schemas).length} schema(s) defined in {schemaLocation}
-        </p>
-      </div>
+    <div className="schemas-view overview-section">
+      <p className="help-text">
+        {Object.keys(schemas).length} schema{Object.keys(schemas).length === 1 ? "" : "s"} in <code>{schemaLocation}</code>
+      </p>
 
       <div className="schemas-list">
         {Object.entries(schemas).map(([name, schema]) => {

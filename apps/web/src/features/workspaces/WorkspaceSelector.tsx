@@ -1,3 +1,4 @@
+import { IconChevronDown, IconFolder, IconPlus } from "@/shared/ui/icons";
 import { useState, type MouseEvent } from "react";
 import type { Workspace } from "./workspace-types";
 
@@ -105,20 +106,25 @@ export function WorkspaceSelector({
           className="workspace-toggle"
           onClick={() => setShowWorkspaceMenu(!showWorkspaceMenu)}
         >
-          <span className="workspace-icon">📁</span>
+          <IconFolder size={15} className="workspace-icon" />
           <span className="workspace-name">
             {activeWorkspace?.name || "No Workspace"}
           </span>
-          <span className="workspace-arrow">{showWorkspaceMenu ? "▲" : "▼"}</span>
+          <IconChevronDown
+            size={14}
+            className="workspace-arrow"
+            style={{ transform: showWorkspaceMenu ? "rotate(180deg)" : undefined }}
+          />
         </button>
         
         <button
           type="button"
           className="workspace-create-btn"
           onClick={() => setShowCreateDialog(true)}
-          title="Create new workspace"
+          title="Create workspace"
+          aria-label="Create workspace"
         >
-          +
+          <IconPlus size={15} />
         </button>
       </div>
 

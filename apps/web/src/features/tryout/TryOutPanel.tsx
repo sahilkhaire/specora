@@ -592,7 +592,7 @@ export function TryOutPanel({
           ) : null}
           </div>
 
-          {requestError ? <p className="tryout-error">{requestError}</p> : null}
+          {requestError ? <p className="tryout-error" role="alert">{requestError}</p> : null}
         </Panel>
 
         <PanelResizeHandle className="tryout-split-resize" aria-label="Resize request and response panels" />

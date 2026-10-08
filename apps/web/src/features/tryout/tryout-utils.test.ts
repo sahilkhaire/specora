@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapTryoutSendError } from "./tryout-utils";
+import { mapTryoutSendError, missingPathParams } from "./tryout-utils";
 
 describe("mapTryoutSendError", () => {
   it("maps timeout failures to a deterministic actionable message", () => {
@@ -33,5 +33,15 @@ describe("mapTryoutSendError", () => {
   it("falls back to preserving unknown errors", () => {
     const message = mapTryoutSendError(new Error("Unexpected downstream issue"), false);
     expect(message).toBe("Request failed: Unexpected downstream issue");
+  });
+});
+
+describe("missingPathParams", () => {
+  it("reports empty brace and colon placeholders once each", () => {
+    expect(missingPathParams("/pet/{petId}/photos/:photoId/{petId}", { petId: "", photoId: "7" })).toEqual(["petId"]);
+  });
+
+  it("returns nothing when every placeholder has a value", () => {
+    expect(missingPathParams("/pet/{petId}", { petId: "{{id}}" })).toEqual([]);
   });
 });

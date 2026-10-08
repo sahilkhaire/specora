@@ -1,7 +1,11 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import type { ThemeMode, WorkbenchHeaderConfig } from "@/app/header-types";
 import {
+  IconBook,
   IconDownload,
+  IconFlow,
+  IconGlobe,
+  IconShield,
   IconHistory,
   IconMonitor,
   IconMoon,
@@ -98,14 +102,14 @@ export function HeaderSettingsMenu({
             <>
               <DropdownMenu.Item className="header-menu-item" onSelect={workbench.onOpenApiOverview}>
                 <span className="header-menu-item-icon">
-                  <IconSettings size={15} />
+                  <IconBook size={15} />
                 </span>
                 <span className="header-menu-item-text">API overview</span>
               </DropdownMenu.Item>
               {workbench.onOpenWorkflows ? (
                 <DropdownMenu.Item className="header-menu-item" onSelect={workbench.onOpenWorkflows}>
                   <span className="header-menu-item-icon">
-                    <IconHistory size={15} />
+                    <IconFlow size={15} />
                   </span>
                   <span className="header-menu-item-text">Workflows</span>
                 </DropdownMenu.Item>
@@ -138,7 +142,7 @@ export function HeaderSettingsMenu({
               {onOpenPublish ? (
                 <DropdownMenu.Item className="header-menu-item" onSelect={onOpenPublish}>
                   <span className="header-menu-item-icon">
-                    <IconUpload size={15} />
+                    <IconGlobe size={15} />
                   </span>
                   <span className="header-menu-item-text">Publish docs</span>
                 </DropdownMenu.Item>
@@ -146,7 +150,7 @@ export function HeaderSettingsMenu({
               {onOpenAdmin ? (
                 <DropdownMenu.Item className="header-menu-item" onSelect={onOpenAdmin}>
                   <span className="header-menu-item-icon">
-                    <IconSettings size={15} />
+                    <IconShield size={15} />
                   </span>
                   <span className="header-menu-item-text">Instance admin</span>
                 </DropdownMenu.Item>

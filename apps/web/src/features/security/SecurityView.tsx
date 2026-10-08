@@ -12,10 +12,7 @@ export function SecurityView({ spec }: SecurityViewProps) {
 
   if (!spec) {
     return (
-      <div className="panel-card">
-        <h2>Security</h2>
-        <p className="empty-message">Load a spec to view security configuration.</p>
-      </div>
+      <p className="empty-message">Load a spec to view security configuration.</p>
     );
   }
 
@@ -24,21 +21,12 @@ export function SecurityView({ spec }: SecurityViewProps) {
 
   if (!hasSecuritySchemes && !hasGlobalSecurity) {
     return (
-      <div className="panel-card">
-        <h2>Security</h2>
-        <p className="empty-message">No security schemes defined in this specification.</p>
-      </div>
+      <p className="empty-message">This specification doesn't define any security schemes.</p>
     );
   }
 
   return (
-    <div className="security-view">
-      <div className="panel-card">
-        <h2>Security</h2>
-        <p className="text-muted">
-          Security schemes and requirements for this API
-        </p>
-      </div>
+    <div className="security-view overview-section">
 
       {hasGlobalSecurity && (
         <div className="panel-card">

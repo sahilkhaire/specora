@@ -47,7 +47,7 @@ describe("App", () => {
 
   it("loads pasted spec and renders summary + operations", async () => {
     renderApp();
-    expect(await screen.findByRole("button", { name: /Default Workspace/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Default Workspace/i, hidden: true })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: /Add your API specification/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Paste" }));
@@ -64,7 +64,7 @@ describe("App", () => {
 
   it("filters operations and updates operation detail", async () => {
     renderApp();
-    expect(await screen.findByRole("button", { name: /Default Workspace/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Default Workspace/i, hidden: true })).toBeInTheDocument();
     await screen.findByRole("heading", { name: /Add your API specification/i });
 
     fireEvent.click(screen.getByRole("tab", { name: "Paste" }));
@@ -92,14 +92,19 @@ describe("App", () => {
 
     renderApp();
 
-    expect(await screen.findByRole("button", { name: /Default Workspace/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Default Workspace/i, hidden: true })).toBeInTheDocument();
+    await screen.findByRole("heading", { name: /Add your API specification/i });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "+" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create workspace" }));
     fireEvent.change(screen.getByLabelText("Workspace Name *"), {
       target: { value: "Billing Workspace" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
+    // A new, empty workspace prompts for a spec; dismiss it.
+    await screen.findByRole("heading", { name: /Add your API specification/i });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(await screen.findByRole("button", { name: /Billing Workspace/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Billing Workspace/i }));
@@ -180,7 +185,7 @@ paths:
     vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
     renderApp();
-    expect(await screen.findByRole("button", { name: /Default Workspace/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Default Workspace/i, hidden: true })).toBeInTheDocument();
     await screen.findByRole("heading", { name: /Add your API specification/i });
     fireEvent.click(screen.getByRole("tab", { name: "Paste" }));
     fireEvent.change(screen.getByPlaceholderText("Paste OpenAPI JSON or YAML here"), {
@@ -249,6 +254,7 @@ paths:
     fireEvent.keyDown(screen.getByRole("button", { name: "Menu" }), { key: "Enter" });
     fireEvent.click(await screen.findByRole("menuitem", { name: /API overview/i }));
     expect(await screen.findByRole("dialog", { name: "API overview" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Servers" }));
     expect(screen.getByText("https://api.example.com")).toBeInTheDocument();
   });
 });
