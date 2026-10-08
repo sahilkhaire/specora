@@ -1,5 +1,6 @@
 import { isFullAppSurface, showEnvironmentInHeader, showWorkspaceManagement } from "@/config/deployment";
 import { HeaderSettingsMenu } from "@/app/HeaderSettingsMenu";
+import { AuthPanel } from "@/features/auth/AuthPanel";
 import type { ThemeMode, WorkbenchHeaderConfig } from "@/app/header-types";
 import { WorkspaceSelector } from "@/features/workspaces/WorkspaceSelector";
 import type { Workspace } from "@/features/workspaces/workspace-types";
@@ -137,6 +138,7 @@ export function AppHeader({
             <IconPanelRight size={17} />
           </button>
         ) : null}
+        {showWorkspace ? <AuthPanel /> : null}
         <HeaderSettingsMenu
           themeMode={themeMode}
           onThemeModeChange={onThemeModeChange}

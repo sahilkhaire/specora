@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { safeExternalHref } from "@/shared/safe-url";
 
 interface SettingsViewProps {
   spec: Record<string, unknown> | null;
@@ -31,6 +32,9 @@ export function SettingsView({
   const contactName = contact?.name as string | undefined;
   const contactEmail = contact?.email as string | undefined;
   const contactUrl = contact?.url as string | undefined;
+  const contactHref = safeExternalHref(contactUrl);
+  const contactMailHref = safeExternalHref(contactEmail ? `mailto:${contactEmail}` : undefined);
+  const licenseHref = safeExternalHref(license?.url);
 
   function handleProxyToggle(checked: boolean) {
     onProxyChange(checked, localProxyUrl);
@@ -69,14 +73,18 @@ export function SettingsView({
                   {contactName && <div>{contactName}</div>}
                   {contactEmail && (
                     <div>
-                      <a href={`mailto:${contactEmail}`}>{contactEmail}</a>
+                      {contactMailHref ? <a href={contactMailHref}>{contactEmail}</a> : contactEmail}
                     </div>
                   )}
                   {contactUrl && (
                     <div>
-                      <a href={contactUrl} target="_blank" rel="noopener noreferrer">
-                        {contactUrl}
-                      </a>
+                      {contactHref ? (
+                        <a href={contactHref} target="_blank" rel="noopener noreferrer">
+                          {contactUrl}
+                        </a>
+                      ) : (
+                        contactUrl
+                      )}
                     </div>
                   )}
                 </dd>
@@ -87,8 +95,8 @@ export function SettingsView({
               <>
                 <dt>License</dt>
                 <dd>
-                  {license.url ? (
-                    <a href={String(license.url)} target="_blank" rel="noopener noreferrer">
+                  {licenseHref ? (
+                    <a href={licenseHref} target="_blank" rel="noopener noreferrer">
                       {String(license.name || license.url)}
                     </a>
                   ) : (

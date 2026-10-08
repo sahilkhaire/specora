@@ -35,9 +35,11 @@ export async function fetchViaTryoutProxy(
     throw new Error(`Proxy returned invalid JSON (HTTP ${proxyResponse.status}).`);
   }
 
-  if (!proxyResponse.ok || !payload.ok) {
-    throw new Error(payload.error ?? `Proxy request failed with HTTP ${proxyResponse.status}`);
+  // The proxy answers 502 with ok:false for upstream non-2xx, but still relays the
+  // upstream status, headers and body. Those are real API responses to show the user.
+  if (payload && typeof payload.status === "number" && payload.status > 0) {
+    return { ...payload, headers: payload.headers ?? {}, body: payload.body ?? "" };
   }
 
-  return payload;
+  throw new Error(payload?.error ?? `Proxy request failed with HTTP ${proxyResponse.status}`);
 }

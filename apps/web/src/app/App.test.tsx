@@ -201,4 +201,23 @@ paths:
       ).toBeInTheDocument();
     });
   });
+
+  it("shows the load error when an embedded spec cannot be fetched", async () => {
+    window.__SPECORA_EMBED__ = { specUrl: "/api-docs/openapi.json" };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 500 }));
+
+    renderApp();
+
+    expect(await screen.findByText("Couldn't load the API specification")).toBeInTheDocument();
+    expect(screen.getByText("Unable to fetch spec (HTTP 500).")).toBeInTheDocument();
+  });
+
+  it("offers spec import after dismissing the first-run prompt", async () => {
+    renderApp();
+    await screen.findByRole("heading", { name: /Add your API specification/i });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Import OpenAPI spec" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
 });

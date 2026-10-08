@@ -1,43 +1,74 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDataContext } from "@/data/DataProvider";
 import { isSdkEmbeddedContext } from "@/config/deployment";
 import { bootstrapCollectionFromSpec, computeSpecFingerprint, emptyState } from "./collection-bootstrap";
 import { capExchangesForRequest, migrateCollectionState } from "./collection-migrate";
 import type { CollectionNode, SavedExchange, SavedRequest, WorkspaceCollectionState } from "./collection-types";
 
+type Updater = (prev: WorkspaceCollectionState) => WorkspaceCollectionState;
+
 export function useCollections(workspaceId: string, spec: Record<string, unknown> | null) {
   const { stores } = useDataContext();
   const [state, setState] = useState<WorkspaceCollectionState>(emptyState());
   const [selectedRequestId, setSelectedRequestId] = useState("");
-  const [loaded, setLoaded] = useState(false);
+  /** Workspace whose collection `state` holds; guards against saving one workspace's data under another. */
+  const [loadedWorkspaceId, setLoadedWorkspaceId] = useState<string | null>(null);
+  const stateRef = useRef(state);
+  const loaded = loadedWorkspaceId === workspaceId;
+
+  const replaceState = useCallback((next: WorkspaceCollectionState) => {
+    stateRef.current = next;
+    setState(next);
+  }, []);
 
   useEffect(() => {
+    replaceState(emptyState());
+    setSelectedRequestId("");
+    setLoadedWorkspaceId(null);
+
     if (!workspaceId) {
-      setState(emptyState());
-      setLoaded(true);
+      setLoadedWorkspaceId("");
       return;
     }
 
     let cancelled = false;
     void (async () => {
-      const data = await stores.collections.load(workspaceId);
+      let data: WorkspaceCollectionState | null = null;
+      try {
+        data = await stores.collections.load(workspaceId);
+      } catch {
+        data = null;
+      }
       if (cancelled) return;
       const migrated = migrateCollectionState(data as Parameters<typeof migrateCollectionState>[0]);
-      setState(migrated);
+      replaceState(migrated);
       if (data && data.version !== 2) {
-        void stores.collections.save(workspaceId, migrated);
+        void stores.collections.save(workspaceId, migrated).catch(() => undefined);
       }
-      setLoaded(true);
+      setLoadedWorkspaceId(workspaceId);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [stores.collections, workspaceId]);
+  }, [replaceState, stores.collections, workspaceId]);
+
+  /** Apply an update against the latest state (not a render-time snapshot) and persist it. */
+  const commit = useCallback(
+    (updater: Updater) => {
+      const next = updater(stateRef.current);
+      if (next === stateRef.current) return;
+      replaceState(next);
+      if (workspaceId) {
+        void stores.collections.save(workspaceId, next).catch(() => undefined);
+      }
+    },
+    [replaceState, stores.collections, workspaceId]
+  );
 
   useEffect(() => {
     if (!workspaceId || !spec || !loaded) return;
-    setState((prev) => {
+    commit((prev) => {
       const fingerprint = computeSpecFingerprint(spec);
       if (prev.specFingerprint === fingerprint && prev.nodes.length > 0) {
         return prev;
@@ -47,22 +78,11 @@ export function useCollections(workspaceId: string, spec: Record<string, unknown
       const fingerprintChanged = prev.specFingerprint !== "" && prev.specFingerprint !== fingerprint;
       const hasExisting = prev.nodes.length > 0 || prev.requests.length > 0;
       const existing = hasExisting && (!embedded || !fingerprintChanged) ? prev : null;
-
-      const next = bootstrapCollectionFromSpec(spec, existing);
-      void stores.collections.save(workspaceId, next);
-      return next;
+      return bootstrapCollectionFromSpec(spec, existing);
     });
-  }, [spec, workspaceId, loaded, stores.collections]);
+  }, [commit, spec, workspaceId, loaded]);
 
-  const persist = useCallback(
-    (next: WorkspaceCollectionState) => {
-      setState(next);
-      if (workspaceId) {
-        void stores.collections.save(workspaceId, next);
-      }
-    },
-    [stores.collections, workspaceId]
-  );
+  const persist = useCallback((next: WorkspaceCollectionState) => commit(() => next), [commit]);
 
   const getRequest = useCallback(
     (id: string): SavedRequest | undefined => state.requests.find((r) => r.id === id),
@@ -71,37 +91,37 @@ export function useCollections(workspaceId: string, spec: Record<string, unknown
 
   const updateRequest = useCallback(
     (id: string, patch: Partial<SavedRequest>) => {
-      persist({
-        ...state,
-        requests: state.requests.map((r) =>
+      commit((prev) => ({
+        ...prev,
+        requests: prev.requests.map((r) =>
           r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r
         )
-      });
+      }));
     },
-    [persist, state]
+    [commit]
   );
 
   const addCustomRequest = useCallback(
     (node: CollectionNode, request: SavedRequest) => {
-      persist({
-        ...state,
-        nodes: [...state.nodes, node],
-        requests: [...state.requests, request]
-      });
+      commit((prev) => ({
+        ...prev,
+        nodes: [...prev.nodes, node],
+        requests: [...prev.requests, request]
+      }));
       setSelectedRequestId(request.id);
     },
-    [persist, state]
+    [commit]
   );
 
   const importFromPostman = useCallback(
     (nodes: CollectionNode[], requests: SavedRequest[]) => {
-      persist({
-        ...state,
-        nodes: [...state.nodes, ...nodes],
-        requests: [...state.requests, ...requests]
-      });
+      commit((prev) => ({
+        ...prev,
+        nodes: [...prev.nodes, ...nodes],
+        requests: [...prev.requests, ...requests]
+      }));
     },
-    [persist, state]
+    [commit]
   );
 
   const getExchangesForRequest = useCallback(
@@ -115,21 +135,22 @@ export function useCollections(workspaceId: string, spec: Record<string, unknown
 
   const addExchange = useCallback(
     (exchange: SavedExchange) => {
-      const withNew = [exchange, ...state.exchanges];
-      const capped = capExchangesForRequest(withNew, exchange.savedRequestId);
-      persist({ ...state, exchanges: capped });
+      commit((prev) => ({
+        ...prev,
+        exchanges: capExchangesForRequest([exchange, ...prev.exchanges], exchange.savedRequestId)
+      }));
     },
-    [persist, state]
+    [commit]
   );
 
   const removeExchange = useCallback(
     (id: string) => {
-      persist({
-        ...state,
-        exchanges: state.exchanges.filter((e) => e.id !== id)
-      });
+      commit((prev) => ({
+        ...prev,
+        exchanges: prev.exchanges.filter((e) => e.id !== id)
+      }));
     },
-    [persist, state]
+    [commit]
   );
 
   const selectedRequest = selectedRequestId ? getRequest(selectedRequestId) : undefined;
@@ -140,7 +161,8 @@ export function useCollections(workspaceId: string, spec: Record<string, unknown
   );
 
   useEffect(() => {
-    if (!selectedRequestId && state.requests.length > 0) {
+    const selectionMissing = !selectedRequestId || !state.requests.some((r) => r.id === selectedRequestId);
+    if (selectionMissing && state.requests.length > 0) {
       setSelectedRequestId(state.requests[0]!.id);
     }
   }, [selectedRequestId, state.requests]);

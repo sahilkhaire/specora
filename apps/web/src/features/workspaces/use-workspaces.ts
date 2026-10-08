@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDataContext } from "@/data/DataProvider";
 import type { Workspace, SpecSource } from "./workspace-types";
 
@@ -72,10 +72,13 @@ export function useWorkspaces() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [list, activeId] = await Promise.all([
-        stores.workspaces.list(),
-        stores.workspaces.getActiveId(),
-      ]);
+      let list: unknown[] = [];
+      let activeId = "";
+      try {
+        [list, activeId] = await Promise.all([stores.workspaces.list(), stores.workspaces.getActiveId()]);
+      } catch {
+        /* backend unreachable: start empty rather than hanging un-hydrated */
+      }
       if (cancelled) return;
       setWorkspaces(normalizeWorkspaces(list));
       setActiveWorkspaceId(activeId);
@@ -104,15 +107,24 @@ export function useWorkspaces() {
     }
   }, [workspaces, activeWorkspaceId, hydrated, stores.workspaces]);
 
+  // Mutations read the latest list from a ref so back-to-back calls don't overwrite each other.
+  const workspacesRef = useRef(workspaces);
+  workspacesRef.current = workspaces;
+  const activeIdRef = useRef(activeWorkspaceId);
+  activeIdRef.current = activeWorkspaceId;
+
   const persist = useCallback(
-    (next: Workspace[], activeId = activeWorkspaceId) => {
+    (next: Workspace[], activeId = activeIdRef.current) => {
+      workspacesRef.current = next;
+      activeIdRef.current = activeId;
       setWorkspaces(next);
+      setActiveWorkspaceId(activeId);
       void stores.workspaces.save(next).catch(() => {
         /* storage full or blocked */
       });
-      void stores.workspaces.setActiveId(activeId);
+      void stores.workspaces.setActiveId(activeId).catch(() => undefined);
     },
-    [stores.workspaces, activeWorkspaceId]
+    [stores.workspaces]
   );
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
@@ -129,21 +141,15 @@ export function useWorkspaces() {
       updatedAt: now,
     };
 
-    const updated = [...workspaces, newWorkspace];
-    setActiveWorkspaceId(newWorkspace.id);
-    persist(updated, newWorkspace.id);
+    persist([...workspacesRef.current, newWorkspace], newWorkspace.id);
     return newWorkspace.id;
-  }, [workspaces, persist]);
+  }, [persist]);
 
   const updateWorkspace = useCallback((id: string, patch: Partial<Omit<Workspace, "id" | "createdAt">>): void => {
-    const updated = workspaces.map((w) => {
-      if (w.id === id) {
-        return { ...w, ...patch, updatedAt: new Date().toISOString() };
-      }
-      return w;
-    });
-    persist(updated);
-  }, [workspaces, persist]);
+    persist(
+      workspacesRef.current.map((w) => (w.id === id ? { ...w, ...patch, updatedAt: new Date().toISOString() } : w))
+    );
+  }, [persist]);
 
   const updateWorkspaceSpec = useCallback((
     id: string,
@@ -158,15 +164,16 @@ export function useWorkspaces() {
   }, [updateWorkspace]);
 
   const deleteWorkspace = useCallback((id: string): void => {
-    const updated = workspaces.filter((w) => w.id !== id);
-    const nextId = activeWorkspaceId === id ? (updated[0]?.id ?? "") : activeWorkspaceId;
-    setActiveWorkspaceId(nextId);
+    const updated = workspacesRef.current.filter((w) => w.id !== id);
+    const currentActive = activeIdRef.current;
+    const nextId = currentActive === id ? (updated[0]?.id ?? "") : currentActive;
     persist(updated, nextId);
-  }, [workspaces, activeWorkspaceId, persist]);
+  }, [persist]);
 
   const switchWorkspace = useCallback((id: string): void => {
+    activeIdRef.current = id;
     setActiveWorkspaceId(id);
-    void stores.workspaces.setActiveId(id);
+    void stores.workspaces.setActiveId(id).catch(() => undefined);
   }, [stores.workspaces]);
 
   return {

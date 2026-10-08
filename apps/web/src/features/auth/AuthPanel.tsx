@@ -28,7 +28,7 @@ export function AuthPanel() {
         <button
           type="button"
           className="btn-secondary"
-          onClick={() => void logout().then(() => refreshAuth())}
+          onClick={() => void logout().finally(() => refreshAuth())}
         >
           Sign out
         </button>
@@ -83,7 +83,13 @@ export function AuthPanel() {
 
   return (
     <div className="auth-panel auth-panel-open">
-      <div className="auth-form">
+      <form
+        className="auth-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleSubmit();
+        }}
+      >
         <div className="load-tabs" role="tablist">
           <button
             type="button"
@@ -102,7 +108,13 @@ export function AuthPanel() {
         </div>
         <label>
           <span>Email</span>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            type="email"
+            autoComplete="email"
+            required
+          />
         </label>
         <label>
           <span>Password</span>
@@ -111,18 +123,24 @@ export function AuthPanel() {
             onChange={(e) => setPassword(e.target.value)}
             type="password"
             minLength={8}
+            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            required
           />
         </label>
-        {error ? <p className="error">{error}</p> : null}
+        {error ? (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        ) : null}
         <div className="auth-form-actions">
           <button type="button" className="btn-secondary" onClick={() => setOpen(false)}>
             Cancel
           </button>
-          <button type="button" disabled={busy} onClick={() => void handleSubmit()}>
+          <button type="submit" disabled={busy}>
             {busy ? "…" : mode === "signup" ? "Create account" : "Sign in"}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

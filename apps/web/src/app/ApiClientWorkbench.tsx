@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner";
 import { exportPostmanCollectionV21 } from "@specora/import-postman/export";
 import {
   findOperationByKey,
@@ -54,6 +54,7 @@ interface ApiClientWorkbenchProps {
   proxyUrl: string;
   onProxyUrlChange: (value: string) => void;
   activeEnv: Environment | null;
+  onImportEnvironment: (name: string, variables: Record<string, string>) => void;
 }
 
 export function ApiClientWorkbench({
@@ -67,7 +68,8 @@ export function ApiClientWorkbench({
   onUseProxyChange,
   proxyUrl,
   onProxyUrlChange,
-  activeEnv
+  activeEnv,
+  onImportEnvironment
 }: ApiClientWorkbenchProps) {
   const embedded = isSdkEmbeddedContext();
   const { stores } = useDataContext();
@@ -637,7 +639,6 @@ export function ApiClientWorkbench({
 
   return (
     <>
-      <Toaster richColors position="top-right" theme="system" />
       <AppShell
         sidebar={
           <CollectionSidebar
@@ -849,10 +850,7 @@ export function ApiClientWorkbench({
           importFromPostman(nodes, requests);
           toast.success(`Imported ${requests.length} requests`);
         }}
-        onImportEnvironment={(name, variables) => {
-          toast.success(`Environment "${name}" ready — open Environment panel to apply`);
-          void variables;
-        }}
+        onImportEnvironment={onImportEnvironment}
       />
       <SaveExchangeDialog
         open={saveExchangeOpen}

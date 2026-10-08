@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDataContext } from "@/data/DataProvider";
 import type { Environment } from "./env-types";
 
@@ -10,10 +10,13 @@ export function useEnvironments() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [list, activeId] = await Promise.all([
-        stores.environments.list(),
-        stores.environments.getActiveId(),
-      ]);
+      let list: Environment[] = [];
+      let activeId = "";
+      try {
+        [list, activeId] = await Promise.all([stores.environments.list(), stores.environments.getActiveId()]);
+      } catch {
+        /* backend unreachable: start with no environments */
+      }
       if (cancelled) return;
       setEnvironments(list);
       setActiveEnvId(activeId);
@@ -23,37 +26,58 @@ export function useEnvironments() {
     };
   }, [stores]);
 
+  const environmentsRef = useRef(environments);
+  environmentsRef.current = environments;
+  const activeIdRef = useRef(activeEnvId);
+  activeIdRef.current = activeEnvId;
+
   const persist = useCallback(
-    (next: Environment[], activeId = activeEnvId) => {
+    (next: Environment[], activeId = activeIdRef.current) => {
+      environmentsRef.current = next;
+      activeIdRef.current = activeId;
       setEnvironments(next);
-      void stores.environments.save(next);
-      void stores.environments.setActiveId(activeId);
+      setActiveEnvId(activeId);
+      void stores.environments.save(next).catch(() => undefined);
+      void stores.environments.setActiveId(activeId).catch(() => undefined);
     },
-    [stores.environments, activeEnvId]
+    [stores.environments]
   );
 
   const activeEnv = environments.find((e) => e.id === activeEnvId) ?? null;
 
-  function createEnvironment(data: Omit<Environment, "id">): void {
-    const newEnv: Environment = { id: crypto.randomUUID(), ...data };
-    persist([...environments, newEnv]);
-  }
+  const createEnvironment = useCallback(
+    (data: Omit<Environment, "id">, options: { activate?: boolean } = {}): string => {
+      const newEnv: Environment = { id: crypto.randomUUID(), ...data };
+      persist([...environmentsRef.current, newEnv], options.activate ? newEnv.id : activeIdRef.current);
+      return newEnv.id;
+    },
+    [persist]
+  );
 
-  function updateEnvironment(id: string, patch: Partial<Omit<Environment, "id">>): void {
-    persist(environments.map((e) => (e.id === id ? { ...e, ...patch } : e)));
-  }
+  const updateEnvironment = useCallback(
+    (id: string, patch: Partial<Omit<Environment, "id">>): void => {
+      persist(environmentsRef.current.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+    },
+    [persist]
+  );
 
-  function deleteEnvironment(id: string): void {
-    const updated = environments.filter((e) => e.id !== id);
-    const next = activeEnvId === id ? (updated[0]?.id ?? "") : activeEnvId;
-    setActiveEnvId(next);
-    persist(updated, next);
-  }
+  const deleteEnvironment = useCallback(
+    (id: string): void => {
+      const updated = environmentsRef.current.filter((e) => e.id !== id);
+      const currentActive = activeIdRef.current;
+      persist(updated, currentActive === id ? (updated[0]?.id ?? "") : currentActive);
+    },
+    [persist]
+  );
 
-  function switchEnvironment(id: string): void {
-    setActiveEnvId(id);
-    void stores.environments.setActiveId(id);
-  }
+  const switchEnvironment = useCallback(
+    (id: string): void => {
+      activeIdRef.current = id;
+      setActiveEnvId(id);
+      void stores.environments.setActiveId(id).catch(() => undefined);
+    },
+    [stores.environments]
+  );
 
   return {
     environments,

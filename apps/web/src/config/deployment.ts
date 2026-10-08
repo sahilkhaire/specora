@@ -127,9 +127,9 @@ export function showImportSpec(): boolean {
   return isFullAppSurface() && !isSdkEmbeddedContext();
 }
 
-/** Show try-out panel (params, headers, body, send). Enabled on full app and SDK embed loads. */
+/** Show try-out panel (params, headers, body, send): full app, published docs, and SDK embed loads. */
 export function showTryOutPanel(): boolean {
-  if (isFullAppSurface()) {
+  if (isFullAppSurface() || deploymentConfig.surface === "docs") {
     return true;
   }
   return Boolean(getSpecoraEmbedConfig()?.specUrl);
@@ -137,5 +137,5 @@ export function showTryOutPanel(): boolean {
 
 /** Environment chip in header — useful when try-out is available. */
 export function showEnvironmentInHeader(): boolean {
-  return isFullAppSurface() || Boolean(getSpecoraEmbedConfig()?.specUrl);
+  return showTryOutPanel();
 }

@@ -17,6 +17,20 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     outDir: mode === "embed" ? "dist-embed" : "dist",
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        // Stable vendor chunks cache across app deploys.
+        manualChunks(id) {
+          const match = id.match(/node_modules\/((?:@[^/]+\/)?[^/]+)/);
+          if (!match) return undefined;
+          const pkg = match[1]!;
+          if (["react", "react-dom", "scheduler"].includes(pkg)) return "react";
+          if (pkg === "yaml") return "yaml";
+          return "vendor";
+        }
+      }
+    },
     commonjsOptions: {
       transformMixedEsModules: true
     }

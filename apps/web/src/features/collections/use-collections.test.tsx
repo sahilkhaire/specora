@@ -1,5 +1,5 @@
 import React from "react";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { DataProvider } from "@/data/DataProvider";
 import { createLocalStorageStores } from "@/data/local-storage-stores";
@@ -95,5 +95,49 @@ describe("useCollections embed priority", () => {
     });
 
     expect(localStorage.getItem(scopedKey(`collections:${workspaceId}`))).toContain("/beta");
+  });
+});
+
+describe("useCollections state integrity", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    delete window.__SPECORA_EMBED__;
+    Object.defineProperty(window, "location", {
+      value: { origin: "https://app.example.com", pathname: "/" },
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  it("keeps both updates when two are applied in the same tick", async () => {
+    const { result } = renderHook(() => useCollections("ws-a", specV1), { wrapper });
+    await waitFor(() => expect(result.current.state.requests.length).toBe(1));
+    const id = result.current.state.requests[0]!.id;
+
+    act(() => {
+      result.current.updateRequest(id, { headers: { "x-one": "1" } });
+      result.current.updateRequest(id, { body: { mode: "json", content: "{}" } });
+    });
+
+    const request = result.current.state.requests[0]!;
+    expect(request.headers).toEqual({ "x-one": "1" });
+    expect(request.body.content).toBe("{}");
+  });
+
+  it("does not save one workspace's collection under another workspace", async () => {
+    const { result, rerender } = renderHook(
+      ({ workspaceId, spec }: { workspaceId: string; spec: Record<string, unknown> }) =>
+        useCollections(workspaceId, spec),
+      { wrapper, initialProps: { workspaceId: "ws-a", spec: specV1 } }
+    );
+    await waitFor(() => expect(result.current.state.requests.some((r) => r.url === "/alpha")).toBe(true));
+
+    rerender({ workspaceId: "ws-b", spec: specV2 });
+    await waitFor(() => expect(result.current.state.requests.some((r) => r.url === "/beta")).toBe(true));
+
+    const storedB = localStorage.getItem(scopedKey("collections:ws-b")) ?? "";
+    expect(storedB).toContain("/beta");
+    expect(storedB).not.toContain("/alpha");
+    expect(localStorage.getItem(scopedKey("collections:ws-a"))).toContain("/alpha");
   });
 });
