@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+import { promises as dns } from "node:dns";
 import { Hono } from "hono";
 import { and, eq, ne } from "drizzle-orm";
 import { db, schema } from "../db/client.js";
@@ -53,12 +55,36 @@ function siteForWorkspace(workspaceId: string): SiteRow | undefined {
   return db.select().from(schema.publishedSites).where(eq(schema.publishedSites.workspaceId, workspaceId)).get();
 }
 
+const CHALLENGE_PREFIX = "_specora-challenge";
+
+type TxtResolver = (hostname: string) => Promise<string[][]>;
+let resolveTxt: TxtResolver = (hostname) => dns.resolveTxt(hostname);
+
+/** Test hook: replace DNS TXT lookups. */
+export function setTxtResolver(resolver: TxtResolver | null): void {
+  resolveTxt = resolver ?? ((hostname) => dns.resolveTxt(hostname));
+}
+
+/** Site row plus the DNS record the owner must publish to verify a custom domain. */
+function siteToJson(site: SiteRow | undefined) {
+  if (!site) return null;
+  const { customDomainToken, ...rest } = site;
+  return {
+    ...rest,
+    customDomainVerified: Boolean(site.customDomain && (site.customDomainVerifiedAt || autoVerifyCustomDomains())),
+    domainVerification:
+      site.customDomain && customDomainToken && !site.customDomainVerifiedAt
+        ? { type: "TXT", name: `${CHALLENGE_PREFIX}.${site.customDomain}`, value: customDomainToken }
+        : null,
+  };
+}
+
 export const publishRoutes = new Hono();
 
 publishRoutes.get("/workspaces/:workspaceId/publish-settings", (c) => {
   const userId = requireUser(c);
   const workspace = requireOwnedWorkspace(userId, c.req.param("workspaceId"));
-  return c.json({ site: siteForWorkspace(workspace.id) ?? null });
+  return c.json({ site: siteToJson(siteForWorkspace(workspace.id)) });
 });
 
 publishRoutes.put("/workspaces/:workspaceId/publish-settings", async (c) => {
@@ -112,12 +138,19 @@ publishRoutes.put("/workspaces/:workspaceId/publish-settings", async (c) => {
         ? new Date().toISOString()
         : null;
 
+  const customDomainToken = !customDomain
+    ? null
+    : !domainChanged && existing?.customDomainToken
+      ? existing.customDomainToken
+      : `specora-verify=${randomBytes(16).toString("hex")}`;
+
   const values = {
     slug,
     hostingType,
     publicHost: publicHostFor(hostingType, slug, customDomain),
     customDomain,
     customDomainVerifiedAt,
+    customDomainToken,
     isPublished,
   };
 
@@ -127,7 +160,39 @@ publishRoutes.put("/workspaces/:workspaceId/publish-settings", async (c) => {
     db.insert(schema.publishedSites).values({ id: crypto.randomUUID(), workspaceId: workspace.id, ...values }).run();
   }
 
-  return c.json({ site: siteForWorkspace(workspace.id) ?? null });
+  return c.json({ site: siteToJson(siteForWorkspace(workspace.id)) });
+});
+
+/** Check the `_specora-challenge.<domain>` TXT record and mark the custom domain verified. */
+publishRoutes.post("/workspaces/:workspaceId/publish-settings/verify-domain", async (c) => {
+  const userId = requireUser(c);
+  const workspace = requireOwnedWorkspace(userId, c.req.param("workspaceId"));
+  const site = siteForWorkspace(workspace.id);
+  if (!site?.customDomain || !site.customDomainToken) {
+    throw badRequest("Set a custom domain before verifying it.");
+  }
+  if (site.customDomainVerifiedAt) {
+    return c.json({ site: siteToJson(site) });
+  }
+
+  const recordName = `${CHALLENGE_PREFIX}.${site.customDomain}`;
+  let records: string[][] = [];
+  try {
+    records = await resolveTxt(recordName);
+  } catch {
+    records = [];
+  }
+  // A TXT record may be split into several strings; compare the joined value.
+  const found = records.some((chunks) => chunks.join("").trim() === site.customDomainToken);
+  if (!found) {
+    throw badRequest(`TXT record ${recordName} with value ${site.customDomainToken} was not found. DNS changes can take a few minutes.`);
+  }
+
+  db.update(schema.publishedSites)
+    .set({ customDomainVerifiedAt: new Date().toISOString() })
+    .where(eq(schema.publishedSites.id, site.id))
+    .run();
+  return c.json({ site: siteToJson(siteForWorkspace(workspace.id)) });
 });
 
 function resolveSiteForRequest(slugParam: string | undefined, hostHeader: string | undefined): SiteRow | undefined {

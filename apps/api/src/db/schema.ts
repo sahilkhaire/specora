@@ -57,6 +57,7 @@ export const publishedSites = sqliteTable("published_sites", {
   publicHost: text("public_host"),
   customDomain: text("custom_domain"),
   customDomainVerifiedAt: text("custom_domain_verified_at"),
+  customDomainToken: text("custom_domain_token"),
   isPublished: integer("is_published", { mode: "boolean" }).notNull().default(false),
 });
 

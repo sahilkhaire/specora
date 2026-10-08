@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { setTxtResolver } from "../src/routes/publish.js";
 import { Client, freshApp, workspace } from "./helpers.js";
 
 describe("admin", () => {
@@ -112,5 +113,46 @@ describe("publishing", () => {
       body: { slug: "acme", hostingType: "custom_domain", customDomain: "docs.acme.com", isPublished: true },
     });
     assert.equal((await new Client(trusted.app).request("/public/docs", { headers: { host: "docs.acme.com" } })).status, 200);
+  });
+
+  it("verifies a custom domain via a DNS TXT challenge", async () => {
+    const { app, owner } = await ownerWithWorkspace();
+    const saved = await owner.request("/workspaces/ws1/publish-settings", {
+      method: "PUT",
+      body: { slug: "acme", hostingType: "custom_domain", customDomain: "docs.acme.com", isPublished: true },
+    });
+    const challenge = saved.json.site.domainVerification;
+    assert.equal(challenge.type, "TXT");
+    assert.equal(challenge.name, "_specora-challenge.docs.acme.com");
+    assert.equal(saved.json.site.customDomainToken, undefined);
+
+    const lookups: string[] = [];
+    try {
+      setTxtResolver(async (name) => {
+        lookups.push(name);
+        return [["unrelated"]];
+      });
+      const missing = await owner.request("/workspaces/ws1/publish-settings/verify-domain", { method: "POST" });
+      assert.equal(missing.status, 400);
+
+      // Long TXT values arrive split into chunks.
+      setTxtResolver(async () => [[challenge.value.slice(0, 10), challenge.value.slice(10)]]);
+      const verified = await owner.request("/workspaces/ws1/publish-settings/verify-domain", { method: "POST" });
+      assert.equal(verified.status, 200);
+      assert.equal(verified.json.site.customDomainVerified, true);
+      assert.equal(verified.json.site.domainVerification, null);
+    } finally {
+      setTxtResolver(null);
+    }
+
+    assert.deepEqual(lookups, ["_specora-challenge.docs.acme.com"]);
+    assert.equal((await new Client(app).request("/public/docs", { headers: { host: "docs.acme.com" } })).status, 200);
+  });
+
+  it("issues a new challenge when the custom domain changes", async () => {
+    const { owner } = await ownerWithWorkspace();
+    const first = await owner.request("/workspaces/ws1/publish-settings", { method: "PUT", body: { customDomain: "a.acme.com" } });
+    const second = await owner.request("/workspaces/ws1/publish-settings", { method: "PUT", body: { customDomain: "b.acme.com" } });
+    assert.notEqual(first.json.site.domainVerification.value, second.json.site.domainVerification.value);
   });
 });

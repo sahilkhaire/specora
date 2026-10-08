@@ -106,6 +106,12 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_published_sites_custom_domain ON published_sites(custom_domain);
     `);
   },
+  // 3: DNS TXT challenge token for custom-domain verification.
+  (conn) => {
+    if (!hasColumn(conn, "published_sites", "custom_domain_token")) {
+      conn.exec("ALTER TABLE published_sites ADD COLUMN custom_domain_token TEXT");
+    }
+  },
 ];
 
 function migrate(conn: Database.Database): void {
