@@ -1,125 +1,161 @@
 import { useEffect, useState } from "react";
 import { deploymentConfig, platformPublishUrl } from "@/config/deployment";
 import { apiFetch } from "@/data/api-client";
+import { Button } from "@/shared/ui/Button";
+import { Modal } from "@/shared/ui/Modal";
 
-interface PublishedSite {
+export interface PublishedSite {
   slug: string;
   hostingType: string;
   publicHost: string | null;
   customDomain: string | null;
+  customDomainVerified: boolean;
+  domainVerification: { type: string; name: string; value: string } | null;
   isPublished: boolean;
 }
 
 interface PublishSettingsProps {
+  open: boolean;
   workspaceId: string;
-  onClose: () => void;
+  onOpenChange: (open: boolean) => void;
 }
 
-export function PublishSettings({ workspaceId, onClose }: PublishSettingsProps) {
+function settingsPath(workspaceId: string): string {
+  return `/workspaces/${encodeURIComponent(workspaceId)}/publish-settings`;
+}
+
+export function PublishSettings({ open, workspaceId, onOpenChange }: PublishSettingsProps) {
+  const [site, setSite] = useState<PublishedSite | null>(null);
   const [slug, setSlug] = useState("");
   const [customDomain, setCustomDomain] = useState("");
   const [isPublished, setIsPublished] = useState(false);
   const [hostingType, setHostingType] = useState("platform_subdomain");
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function applySite(next: PublishedSite | null) {
+    setSite(next);
+    if (!next) return;
+    setSlug(next.slug);
+    setCustomDomain(next.customDomain ?? "");
+    setIsPublished(next.isPublished);
+    setHostingType(next.hostingType);
+  }
 
   useEffect(() => {
-    if (!deploymentConfig.apiBaseUrl) return;
-    void apiFetch<{ site: PublishedSite | null }>(
-      `/workspaces/${encodeURIComponent(workspaceId)}/publish-settings`
-    )
-      .then((data) => {
-        if (!data.site) return;
-        setSlug(data.site.slug);
-        setCustomDomain(data.site.customDomain ?? "");
-        setIsPublished(data.site.isPublished);
-        setHostingType(data.site.hostingType);
-      })
-      .catch(() => {
-        /* guest mode — no API */
-      });
-  }, [workspaceId]);
-
-  async function save() {
-    if (!deploymentConfig.apiBaseUrl) {
-      setError("Publishing requires API (signed-in SaaS mode).");
-      return;
-    }
-
+    if (!open) return;
     setError("");
+    setNotice("");
+    apiFetch<{ site: PublishedSite | null }>(settingsPath(workspaceId))
+      .then((data) => applySite(data.site))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Could not load publish settings."));
+  }, [open, workspaceId]);
+
+  async function run(action: () => Promise<{ site: PublishedSite | null }>, successMessage: string) {
+    setError("");
+    setNotice("");
+    setBusy(true);
     try {
-      await apiFetch(`/workspaces/${encodeURIComponent(workspaceId)}/publish-settings`, {
-        method: "PUT",
-        body: JSON.stringify({
-          slug,
-          customDomain: customDomain || undefined,
-          isPublished,
-          hostingType,
-          publicHost: customDomain ? `https://${customDomain}` : platformPublishUrl(slug),
-        }),
-      });
-      setSaved(true);
+      applySite((await action()).site);
+      setNotice(successMessage);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed.");
+      setError(err instanceof Error ? err.message : "Request failed.");
+    } finally {
+      setBusy(false);
     }
   }
 
-  const previewUrl = customDomain
-    ? `https://${customDomain}`
-    : slug
-      ? platformPublishUrl(slug)
-      : "";
+  function save() {
+    void run(
+      () =>
+        apiFetch(settingsPath(workspaceId), {
+          method: "PUT",
+          body: JSON.stringify({ slug, customDomain, isPublished, hostingType })
+        }),
+      "Publish settings saved."
+    );
+  }
+
+  function verify() {
+    void run(
+      () => apiFetch(`${settingsPath(workspaceId)}/verify-domain`, { method: "POST" }),
+      "Domain verified."
+    );
+  }
+
+  const previewUrl = site?.publicHost ?? (slug ? platformPublishUrl(slug) : "");
 
   return (
-    <div className="spec-loader-overlay" onClick={onClose}>
-      <div className="spec-loader-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="spec-loader-header">
-          <h2>Publish documentation</h2>
-          <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
-        </div>
-        <div className="spec-loader-content">
-          <p className="text-muted">
-            Host read-only API docs on a subdomain or custom domain. Workflows and try-out stay in the full app.
+    <Modal
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Publish documentation"
+      description="Host read-only API docs with try-out on a subdomain or your own domain."
+    >
+      <form
+        className="ui-dialog-body"
+        onSubmit={(event) => {
+          event.preventDefault();
+          save();
+        }}
+      >
+        <label>
+          <span>Slug ({deploymentConfig.platformDocsDomain})</span>
+          <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="acme-api" />
+        </label>
+        <label>
+          <span>Hosting</span>
+          <select value={hostingType} onChange={(e) => setHostingType(e.target.value)}>
+            <option value="platform_subdomain">{deploymentConfig.platformDocsDomain} subdomain</option>
+            <option value="custom_domain">Custom domain</option>
+          </select>
+        </label>
+        {hostingType === "custom_domain" ? (
+          <label>
+            <span>Custom domain</span>
+            <input value={customDomain} onChange={(e) => setCustomDomain(e.target.value)} placeholder="docs.example.com" />
+          </label>
+        ) : null}
+        <label className="inline-switch">
+          <span>Published</span>
+          <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} />
+        </label>
+
+        {previewUrl ? <p className="text-muted">Docs URL: {previewUrl}</p> : null}
+
+        {site?.domainVerification ? (
+          <div className="panel-card">
+            <p>
+              <strong>Verify {site.customDomain}</strong>: add this DNS record, then select Verify domain.
+            </p>
+            <p className="text-muted">
+              {site.domainVerification.type} <code>{site.domainVerification.name}</code>
+            </p>
+            <p className="text-muted">
+              Value <code>{site.domainVerification.value}</code>
+            </p>
+            <Button variant="secondary" onClick={verify} disabled={busy}>
+              Verify domain
+            </Button>
+          </div>
+        ) : site?.customDomain && site.customDomainVerified ? (
+          <p className="text-muted">{site.customDomain} is verified.</p>
+        ) : null}
+
+        {error ? (
+          <p className="error" role="alert">
+            {error}
           </p>
-          <label>
-            <span>Slug ({deploymentConfig.platformDocsDomain})</span>
-            <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="acme-api" />
-          </label>
-          <label>
-            <span>Custom domain (optional)</span>
-            <input
-              value={customDomain}
-              onChange={(e) => setCustomDomain(e.target.value)}
-              placeholder="docs.example.com"
-            />
-          </label>
-          <label>
-            <span>Hosting</span>
-            <select value={hostingType} onChange={(e) => setHostingType(e.target.value)}>
-              <option value="platform_subdomain">
-                {deploymentConfig.platformDocsDomain} subdomain
-              </option>
-              <option value="custom_domain">Custom domain</option>
-            </select>
-          </label>
-          <label className="inline-switch">
-            <span>Published</span>
-            <input
-              type="checkbox"
-              checked={isPublished}
-              onChange={(e) => setIsPublished(e.target.checked)}
-            />
-          </label>
-          {previewUrl ? <p className="text-muted">Docs URL: {previewUrl}</p> : null}
-          {error ? <p className="error">{error}</p> : null}
-          {saved ? <p className="healthy-badge">Saved</p> : null}
-          <button type="button" onClick={() => void save()}>
+        ) : null}
+        {notice ? <p role="status">{notice}</p> : null}
+
+        <div className="ui-dialog-actions">
+          <Button type="submit" disabled={busy}>
             Save publish settings
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 }

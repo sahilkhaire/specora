@@ -22,7 +22,8 @@ export default defineConfig(({ mode }) => ({
       output: {
         // Stable vendor chunks cache across app deploys.
         manualChunks(id) {
-          const match = id.match(/node_modules\/((?:@[^/]+\/)?[^/]+)/);
+          // Greedy prefix: use the last node_modules segment (nested installs).
+          const match = id.match(/.*node_modules\/((?:@[^/]+\/)?[^/]+)/);
           if (!match) return undefined;
           const pkg = match[1]!;
           if (["react", "react-dom", "scheduler"].includes(pkg)) return "react";

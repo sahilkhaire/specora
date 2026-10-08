@@ -42,6 +42,7 @@ describe("App", () => {
     localStorage.clear();
     vi.restoreAllMocks();
     delete window.__SPECORA_EMBED__;
+    window.history.replaceState(null, "", "/");
   });
 
   it("loads pasted spec and renders summary + operations", async () => {
@@ -219,5 +220,35 @@ paths:
 
     fireEvent.click(await screen.findByRole("button", { name: "Import OpenAPI spec" }));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("opens the request named by ?op= and keeps the URL in sync", async () => {
+    window.__SPECORA_EMBED__ = { specUrl: "/api-docs/openapi.json", includeAll: true };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(fixture, { status: 200 }));
+    window.history.replaceState(null, "", `/?op=${encodeURIComponent("POST:/orders:createOrder")}`);
+
+    renderApp();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Request URL")).toHaveValue("https://api.example.com/orders");
+    });
+    expect(new URLSearchParams(window.location.search).get("op")).toBe("POST:/orders:createOrder");
+
+    fireEvent.click(screen.getByRole("button", { name: /List pets/i }));
+    await waitFor(() => {
+      expect(new URLSearchParams(window.location.search).get("op")).toBe("GET:/pets:");
+    });
+  });
+
+  it("opens the API overview with Swagger servers from the header menu", async () => {
+    window.__SPECORA_EMBED__ = { specUrl: "/api-docs/openapi.json", includeAll: true };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(fixture, { status: 200 }));
+    renderApp();
+    await screen.findByRole("button", { name: /List pets/i });
+
+    fireEvent.keyDown(screen.getByRole("button", { name: "Menu" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: /API overview/i }));
+    expect(await screen.findByRole("dialog", { name: "API overview" })).toBeInTheDocument();
+    expect(screen.getByText("https://api.example.com")).toBeInTheDocument();
   });
 });

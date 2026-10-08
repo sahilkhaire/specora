@@ -39,7 +39,7 @@ export function SchemasView({ spec }: SchemasViewProps) {
 
       <div className="schemas-list">
         {Object.entries(schemas).map(([name, schema]) => {
-          const schemaObj = schema as Record<string, unknown>;
+          const schemaObj = (schema && typeof schema === "object" ? schema : {}) as Record<string, unknown>;
           const type = schemaObj.type as string | undefined;
           const description = schemaObj.description as string | undefined;
           const properties = schemaObj.properties as Record<string, unknown> | undefined;
@@ -66,7 +66,7 @@ export function SchemasView({ spec }: SchemasViewProps) {
                     </thead>
                     <tbody>
                       {Object.entries(properties).map(([propName, propSchema]) => {
-                        const prop = propSchema as Record<string, unknown>;
+                        const prop = (propSchema && typeof propSchema === "object" ? propSchema : {}) as Record<string, unknown>;
                         return (
                           <tr key={propName}>
                             <td className="prop-name">{propName}</td>

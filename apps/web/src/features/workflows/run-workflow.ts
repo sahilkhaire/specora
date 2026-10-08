@@ -107,6 +107,7 @@ async function executeStep(
         status: payload.status,
         durationMs: Math.round(performance.now() - start),
         responseBody: payload.body ?? "",
+        error: isSuccessStatus(payload.status) ? undefined : `HTTP ${payload.status}`,
       };
     }
 

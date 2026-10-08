@@ -2,8 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { exportPostmanCollectionV21 } from "@specora/import-postman/export";
 import {
+  clearOperationKeyFromLocation,
   findOperationByKey,
+  getOperationKeyFromLocation,
   getUsedSchemaDetailsForOperation,
+  setOperationKeyInLocation,
   type OperationItem
 } from "@/features/spec/spec-utils";
 import { OperationInsightPanel } from "@/features/schemas/OperationInsightPanel";
@@ -21,7 +24,11 @@ import {
   serializeParamRecord,
   serializeParamRows
 } from "@/features/tryout/param-rows";
-import { authFieldsForUi, type AuthSource } from "@/features/tryout/auth-source";
+import { authFieldsForUi, authFromEnvironment, type AuthSource } from "@/features/tryout/auth-source";
+import { ApiOverviewDialog } from "@/features/spec/ApiOverviewDialog";
+import { WorkflowsView } from "@/features/workflows/WorkflowsView";
+import { useWorkflows } from "@/features/workflows/use-workflows";
+import { Modal } from "@/shared/ui/Modal";
 import type { Environment } from "@/features/environments/env-types";
 import { AppShell } from "./AppShell";
 import { CollectionSidebar } from "@/features/collections/CollectionSidebar";
@@ -86,6 +93,27 @@ export function ApiClientWorkbench({
     exchangesForSelected
   } = useCollections(workspaceId, spec);
 
+  // Deep links: `?operation=<key>` opens the matching request; selection keeps the URL in sync.
+  const deepLinkResolved = useRef(false);
+  useEffect(() => {
+    if (deepLinkResolved.current || collectionState.requests.length === 0) return;
+    deepLinkResolved.current = true;
+    const key = getOperationKeyFromLocation();
+    const match = key ? collectionState.requests.find((request) => request.operationKey === key) : undefined;
+    if (match) setSelectedRequestId(match.id);
+  }, [collectionState.requests, setSelectedRequestId]);
+
+  const selectedId = selectedRequest?.id;
+  const selectedOperationKey = selectedRequest?.operationKey;
+  useEffect(() => {
+    if (!deepLinkResolved.current || !selectedId) return;
+    if (selectedOperationKey) {
+      setOperationKeyInLocation(selectedOperationKey, { replace: true });
+    } else {
+      clearOperationKeyFromLocation({ replace: true });
+    }
+  }, [selectedId, selectedOperationKey]);
+
   const patchRequest = useCallback(
     (id: string, patch: Partial<SavedRequest>) => {
       if (embedded && "method" in patch) {
@@ -121,6 +149,9 @@ export function ApiClientWorkbench({
   const [historyOpen, setHistoryOpen] = useState(readHistoryPanelOpen);
   const [schemaPanelOpen, setSchemaPanelOpen] = useState(readSchemaPanelOpen);
   const [history, setHistory] = useState<RequestHistoryEntry[]>([]);
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const [workflowsOpen, setWorkflowsOpen] = useState(false);
+  const workflowsApi = useWorkflows(embedded ? "" : workspaceId);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -625,10 +656,13 @@ export function ApiClientWorkbench({
       onToggleHistory: toggleHistoryPanel,
       schemaPanelOpen,
       onToggleSchemaPanel: toggleSchemaPanel,
-      onExportPostman: handleExportPostman
+      onExportPostman: handleExportPostman,
+      onOpenApiOverview: () => setOverviewOpen(true),
+      onOpenWorkflows: embedded ? undefined : () => setWorkflowsOpen(true)
     });
     return () => onWorkbenchHeaderChange(null);
   }, [
+    embedded,
     handleExportPostman,
     historyOpen,
     onWorkbenchHeaderChange,
@@ -852,6 +886,28 @@ export function ApiClientWorkbench({
         }}
         onImportEnvironment={onImportEnvironment}
       />
+      <ApiOverviewDialog
+        open={overviewOpen}
+        onOpenChange={setOverviewOpen}
+        spec={spec}
+        serverUrl={serverUrl}
+        onServerUrlChange={onServerUrlChange}
+      />
+      {!embedded ? (
+        <Modal open={workflowsOpen} onOpenChange={setWorkflowsOpen} title="Workflows" size="wide">
+          <WorkflowsView
+            specLoaded
+            operations={operations}
+            serverUrl={serverUrl}
+            useProxy={useProxy}
+            proxyUrl={proxyUrl}
+            activeEnv={activeEnv}
+            auth={authFromEnvironment(activeEnv)}
+            workflowsApi={workflowsApi}
+            onImportSpec={() => setWorkflowsOpen(false)}
+          />
+        </Modal>
+      ) : null}
       <SaveExchangeDialog
         open={saveExchangeOpen}
         defaultName={saveExchangeDefaultName}

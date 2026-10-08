@@ -18,6 +18,8 @@ interface HeaderSettingsMenuProps {
   sdkDownloadUrls?: { json?: string; yaml?: string };
   workbench?: WorkbenchHeaderConfig | null;
   showExportPostman?: boolean;
+  onOpenPublish?: () => void;
+  onOpenAdmin?: () => void;
 }
 
 const themeOptions: Array<{ mode: ThemeMode; label: string; icon: typeof IconSun }> = [
@@ -33,7 +35,9 @@ export function HeaderSettingsMenu({
   onImportSpec,
   sdkDownloadUrls,
   workbench,
-  showExportPostman = true
+  showExportPostman = true,
+  onOpenPublish,
+  onOpenAdmin
 }: HeaderSettingsMenuProps) {
   const hasSdkDownloads = Boolean(sdkDownloadUrls?.json || sdkDownloadUrls?.yaml);
 
@@ -92,6 +96,20 @@ export function HeaderSettingsMenu({
 
           {workbench ? (
             <>
+              <DropdownMenu.Item className="header-menu-item" onSelect={workbench.onOpenApiOverview}>
+                <span className="header-menu-item-icon">
+                  <IconSettings size={15} />
+                </span>
+                <span className="header-menu-item-text">API overview</span>
+              </DropdownMenu.Item>
+              {workbench.onOpenWorkflows ? (
+                <DropdownMenu.Item className="header-menu-item" onSelect={workbench.onOpenWorkflows}>
+                  <span className="header-menu-item-icon">
+                    <IconHistory size={15} />
+                  </span>
+                  <span className="header-menu-item-text">Workflows</span>
+                </DropdownMenu.Item>
+              ) : null}
               <DropdownMenu.Item className="header-menu-item" onSelect={workbench.onToggleHistory}>
                 <span className="header-menu-item-icon">
                   <IconHistory size={15} />
@@ -109,6 +127,28 @@ export function HeaderSettingsMenu({
                     <IconDownload size={15} />
                   </span>
                   <span className="header-menu-item-text">Export Postman collection</span>
+                </DropdownMenu.Item>
+              ) : null}
+              <DropdownMenu.Separator className="header-menu-separator" />
+            </>
+          ) : null}
+
+          {onOpenPublish || onOpenAdmin ? (
+            <>
+              {onOpenPublish ? (
+                <DropdownMenu.Item className="header-menu-item" onSelect={onOpenPublish}>
+                  <span className="header-menu-item-icon">
+                    <IconUpload size={15} />
+                  </span>
+                  <span className="header-menu-item-text">Publish docs</span>
+                </DropdownMenu.Item>
+              ) : null}
+              {onOpenAdmin ? (
+                <DropdownMenu.Item className="header-menu-item" onSelect={onOpenAdmin}>
+                  <span className="header-menu-item-icon">
+                    <IconSettings size={15} />
+                  </span>
+                  <span className="header-menu-item-text">Instance admin</span>
                 </DropdownMenu.Item>
               ) : null}
               <DropdownMenu.Separator className="header-menu-separator" />

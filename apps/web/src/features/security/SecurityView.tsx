@@ -20,7 +20,7 @@ export function SecurityView({ spec }: SecurityViewProps) {
   }
 
   const hasSecuritySchemes = securitySchemes && Object.keys(securitySchemes).length > 0;
-  const hasGlobalSecurity = security && security.length > 0;
+  const hasGlobalSecurity = Array.isArray(security) && security.length > 0;
 
   if (!hasSecuritySchemes && !hasGlobalSecurity) {
     return (
@@ -46,10 +46,12 @@ export function SecurityView({ spec }: SecurityViewProps) {
           <ul className="security-list">
             {security!.map((req, idx) => (
               <li key={idx}>
-                {Object.entries(req).map(([name, scopes]) => (
+                {Object.entries(req ?? {}).map(([name, scopes]) => (
                   <span key={name} className="security-requirement">
                     <strong>{name}</strong>
-                    {scopes.length > 0 && <span className="scopes">: {scopes.join(", ")}</span>}
+                    {Array.isArray(scopes) && scopes.length > 0 && (
+                      <span className="scopes">: {scopes.join(", ")}</span>
+                    )}
                   </span>
                 ))}
               </li>
@@ -63,7 +65,7 @@ export function SecurityView({ spec }: SecurityViewProps) {
           <h3>Security Schemes</h3>
           <div className="security-schemes-list">
             {Object.entries(securitySchemes!).map(([name, scheme]) => {
-              const schemeObj = scheme as Record<string, unknown>;
+              const schemeObj = (scheme && typeof scheme === "object" ? scheme : {}) as Record<string, unknown>;
               const type = schemeObj.type as string;
               const description = schemeObj.description as string | undefined;
               const bearerFormat = schemeObj.bearerFormat as string | undefined;

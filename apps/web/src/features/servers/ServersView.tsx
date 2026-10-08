@@ -4,8 +4,48 @@ interface ServersViewProps {
   onServerUrlChange: (url: string) => void;
 }
 
+interface ServerEntry {
+  url: string;
+  description?: string;
+  variables?: Record<string, unknown>;
+}
+
+/** OpenAPI 3 `servers`, or a synthesized list from Swagger 2.0 `schemes`/`host`/`basePath`. */
+export function listServers(spec: Record<string, unknown> | null): ServerEntry[] {
+  if (!spec) return [];
+  if (Array.isArray(spec.servers)) {
+    return spec.servers
+      .filter((server): server is Record<string, unknown> => Boolean(server) && typeof server === "object")
+      .filter((server) => typeof server.url === "string")
+      .map((server) => ({
+        url: server.url as string,
+        description: typeof server.description === "string" ? server.description : undefined,
+        variables:
+          server.variables && typeof server.variables === "object"
+            ? (server.variables as Record<string, unknown>)
+            : undefined
+      }));
+  }
+  if (typeof spec.host === "string" && spec.host) {
+    const basePath = typeof spec.basePath === "string" ? spec.basePath : "";
+    const schemes = Array.isArray(spec.schemes) && spec.schemes.length > 0 ? spec.schemes : ["https"];
+    return schemes
+      .filter((scheme): scheme is string => typeof scheme === "string")
+      .map((scheme) => ({ url: `${scheme}://${spec.host as string}${basePath}` }));
+  }
+  return [];
+}
+
+/** Fill `{name}` placeholders with each variable's declared default. */
+export function resolveServerUrl(server: ServerEntry): string {
+  return server.url.replace(/\{([^}]+)\}/g, (match, name: string) => {
+    const definition = server.variables?.[name] as { default?: unknown } | undefined;
+    return definition && definition.default !== undefined ? String(definition.default) : match;
+  });
+}
+
 export function ServersView({ spec, currentServerUrl, onServerUrlChange }: ServersViewProps) {
-  const servers = spec?.servers as Array<Record<string, unknown>> | undefined;
+  const servers = listServers(spec);
 
   if (!spec) {
     return (
@@ -52,9 +92,7 @@ export function ServersView({ spec, currentServerUrl, onServerUrlChange }: Serve
         <h3>Available Servers</h3>
         <div className="servers-list">
           {servers.map((server, idx) => {
-            const url = server.url as string;
-            const description = server.description as string | undefined;
-            const variables = server.variables as Record<string, unknown> | undefined;
+            const { url, description, variables } = server;
 
             return (
               <div key={idx} className="server-item">
@@ -63,7 +101,7 @@ export function ServersView({ spec, currentServerUrl, onServerUrlChange }: Serve
                   <button
                     type="button"
                     className="btn-secondary server-select-btn"
-                    onClick={() => onServerUrlChange(url)}
+                    onClick={() => onServerUrlChange(resolveServerUrl(server))}
                   >
                     Use This Server
                   </button>
@@ -84,7 +122,7 @@ export function ServersView({ spec, currentServerUrl, onServerUrlChange }: Serve
                       </thead>
                       <tbody>
                         {Object.entries(variables).map(([varName, varDef]) => {
-                          const varObj = varDef as Record<string, unknown>;
+                          const varObj = (varDef ?? {}) as Record<string, unknown>;
                           return (
                             <tr key={varName}>
                               <td className="var-name">{`{${varName}}`}</td>

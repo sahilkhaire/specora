@@ -191,6 +191,16 @@ npm run publish:embed-cdn
 | `TRUST_PROXY` | `false` | Use `X-Forwarded-For` for rate limiting when behind a trusted reverse proxy. |
 | `SPECORA_MAX_BODY_BYTES` | 20 MB | Request body limit (specs are stored inline). |
 
+### Publishing docs
+
+Signed-in users can publish a workspace from **Menu → Publish docs**. Docs are served at `https://<slug>.<PLATFORM_DOCS_DOMAIN>` by a web build with `VITE_APP_SURFACE=docs`, which loads the spec from `GET /public/docs`.
+
+Custom domains are served only after verification: save the domain, add the shown DNS record (`TXT _specora-challenge.<domain>` with the `specora-verify=…` value), then select **Verify domain**. Single-tenant installs can skip this with `PUBLISH_AUTO_VERIFY_CUSTOM_DOMAINS=true`.
+
+Enterprise deployments with `SPECORA_ADMIN_PASSWORD` set expose **Menu → Instance admin** for instance visibility, base domain, and refreshing a workspace spec from a URL.
+
+Links to a specific endpoint use `?op=<METHOD>:<path>:<operationId>`; the URL updates as you select requests.
+
 Security notes for operators:
 
 - Passwords are hashed with scrypt; session and admin tokens are stored only as SHA-256 hashes.

@@ -29,6 +29,8 @@ interface AppHeaderProps {
   sdkDownloadUrls?: { json?: string; yaml?: string };
   workbench?: WorkbenchHeaderConfig | null;
   showExportPostman?: boolean;
+  onOpenPublish?: () => void;
+  onOpenAdmin?: () => void;
 }
 
 export function AppHeader({
@@ -51,7 +53,9 @@ export function AppHeader({
   showImportSpec,
   sdkDownloadUrls,
   workbench,
-  showExportPostman = true
+  showExportPostman = true,
+  onOpenPublish,
+  onOpenAdmin
 }: AppHeaderProps) {
   const showWorkspace = showWorkspaceManagement();
   const showEnvironment = showEnvironmentInHeader();
@@ -147,6 +151,8 @@ export function AppHeader({
           sdkDownloadUrls={sdkDownloadUrls}
           workbench={workbench}
           showExportPostman={showExportPostman}
+          onOpenPublish={onOpenPublish}
+          onOpenAdmin={onOpenAdmin}
         />
       </nav>
     </header>

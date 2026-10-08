@@ -13,7 +13,10 @@ import {
   isSdkEmbeddedContext,
   showImportSpec as canImportSpec
 } from "@/config/deployment";
+import { useDataContext } from "@/data/DataProvider";
 import { getEmbedWorkspaceId } from "@/data/storage-scope";
+import { AdminView } from "@/features/admin/AdminView";
+import { PublishSettings } from "@/features/publish/PublishSettings";
 import { useEnvironments } from "@/features/environments/use-environments";
 import { EnvPanel } from "@/features/environments/EnvPanel";
 import { SettingsView } from "@/features/settings/SettingsView";
@@ -46,6 +49,9 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [isEnvPanelOpen, setIsEnvPanelOpen] = useState(false);
   const [workbenchHeader, setWorkbenchHeader] = useState<WorkbenchHeaderConfig | null>(null);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const { backend } = useDataContext();
   const specPromptDismissedRef = useRef<Set<string>>(new Set());
 
   const {
@@ -164,6 +170,10 @@ export function App() {
   );
 
   const info = (spec?.info as Record<string, unknown> | undefined) ?? {};
+  const hostedApp = !isSdkEmbeddedContext() && Boolean(deploymentConfig.apiBaseUrl);
+  // Publishing needs the workspace to exist server-side, i.e. a signed-in (synced) account.
+  const canPublish = hostedApp && backend === "remote" && Boolean(activeWorkspace);
+  const canAdmin = hostedApp && deploymentConfig.mode === "enterprise";
   const workbenchWorkspaceId = isSdkEmbeddedContext() ? getEmbedWorkspaceId() : activeWorkspaceId;
   const sdkDownloadUrls = embedSpecUrl
     ? { json: embedConfig?.downloadJsonUrl, yaml: embedConfig?.downloadYamlUrl }
@@ -237,6 +247,8 @@ export function App() {
         sdkDownloadUrls={sdkDownloadUrls}
         workbench={spec ? workbenchHeader : null}
         showExportPostman={!isSdkEmbeddedContext()}
+        onOpenPublish={canPublish ? () => setPublishOpen(true) : undefined}
+        onOpenAdmin={canAdmin ? () => setAdminOpen(true) : undefined}
       />
 
       <div className="app-body">
@@ -287,6 +299,13 @@ export function App() {
           onLoaded={handleSpecLoaded}
         />
       )}
+
+      {canPublish && activeWorkspace ? (
+        <PublishSettings open={publishOpen} onOpenChange={setPublishOpen} workspaceId={activeWorkspace.id} />
+      ) : null}
+      {canAdmin ? (
+        <AdminView open={adminOpen} onOpenChange={setAdminOpen} activeWorkspaceId={activeWorkspaceId} />
+      ) : null}
 
       <EnvPanel
         isOpen={isEnvPanelOpen}

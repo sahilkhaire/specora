@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDataContext } from "@/data/DataProvider";
 import type { Workflow, WorkflowRunMode, WorkflowStep } from "./workflow-types";
 
@@ -28,9 +28,14 @@ export function useWorkflows(workspaceId: string) {
     };
   }, [stores, workspaceId]);
 
+  // Mutations read the latest list so back-to-back edits don't overwrite each other.
+  const workflowsRef = useRef(workflows);
+  workflowsRef.current = workflows;
+
   const persist = useCallback(
     (next: Workflow[]) => {
       if (!workspaceId) return;
+      workflowsRef.current = next;
       setWorkflows(next);
       void stores.workflows.save(workspaceId, next);
     },
@@ -50,37 +55,37 @@ export function useWorkflows(workspaceId: string) {
       createdAt: now,
       updatedAt: now,
     };
-    const next = [...workflows, workflow];
+    const next = [...workflowsRef.current, workflow];
     setActiveWorkflowId(workflow.id);
     persist(next);
     return workflow.id;
-  }, [workflows, persist]);
+  }, [persist]);
 
   const updateWorkflow = useCallback((
     id: string,
     patch: Partial<Pick<Workflow, "name" | "description" | "runMode" | "steps">>
   ): void => {
     persist(
-      workflows.map((workflow) => {
+      workflowsRef.current.map((workflow) => {
         if (workflow.id !== id) return workflow;
         return { ...workflow, ...patch, updatedAt: new Date().toISOString() };
       })
     );
-  }, [workflows, persist]);
+  }, [persist]);
 
   const deleteWorkflow = useCallback((id: string): void => {
-    const next = workflows.filter((w) => w.id !== id);
+    const next = workflowsRef.current.filter((w) => w.id !== id);
     setActiveWorkflowId((current) => {
       if (current !== id) return current;
       return next[0]?.id ?? "";
     });
     persist(next);
-  }, [workflows, persist]);
+  }, [persist]);
 
   const addStep = useCallback((workflowId: string, step: Omit<WorkflowStep, "id">): void => {
     const newStep: WorkflowStep = { id: crypto.randomUUID(), ...step };
     persist(
-      workflows.map((workflow) => {
+      workflowsRef.current.map((workflow) => {
         if (workflow.id !== workflowId) return workflow;
         return {
           ...workflow,
@@ -89,7 +94,7 @@ export function useWorkflows(workspaceId: string) {
         };
       })
     );
-  }, [workflows, persist]);
+  }, [persist]);
 
   const updateStep = useCallback((
     workflowId: string,
@@ -97,7 +102,7 @@ export function useWorkflows(workspaceId: string) {
     patch: Partial<Omit<WorkflowStep, "id" | "operationKey" | "method" | "path" | "summary">>
   ): void => {
     persist(
-      workflows.map((workflow) => {
+      workflowsRef.current.map((workflow) => {
         if (workflow.id !== workflowId) return workflow;
         return {
           ...workflow,
@@ -106,11 +111,11 @@ export function useWorkflows(workspaceId: string) {
         };
       })
     );
-  }, [workflows, persist]);
+  }, [persist]);
 
   const removeStep = useCallback((workflowId: string, stepId: string): void => {
     persist(
-      workflows.map((workflow) => {
+      workflowsRef.current.map((workflow) => {
         if (workflow.id !== workflowId) return workflow;
         return {
           ...workflow,
@@ -119,11 +124,11 @@ export function useWorkflows(workspaceId: string) {
         };
       })
     );
-  }, [workflows, persist]);
+  }, [persist]);
 
   const moveStep = useCallback((workflowId: string, stepId: string, direction: -1 | 1): void => {
     persist(
-      workflows.map((workflow) => {
+      workflowsRef.current.map((workflow) => {
         if (workflow.id !== workflowId) return workflow;
         const index = workflow.steps.findIndex((step) => step.id === stepId);
         if (index < 0) return workflow;
@@ -135,7 +140,7 @@ export function useWorkflows(workspaceId: string) {
         return { ...workflow, steps, updatedAt: new Date().toISOString() };
       })
     );
-  }, [workflows, persist]);
+  }, [persist]);
 
   const setRunMode = useCallback((workflowId: string, runMode: WorkflowRunMode): void => {
     updateWorkflow(workflowId, { runMode });
